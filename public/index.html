@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TT Waypoint Map</title>
 <meta name="description" content="In-game waypoint map for Transport Tycoon — jobs, landmarks and islands, one click to a GPS route.">
+<link rel="stylesheet" href="./vendor/leaflet.css">
 <link rel="stylesheet" href="./styles.css">
+<script src="./vendor/leaflet.js"></script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🗺️</text></svg>">
 </head>
 <body>
@@ -28,6 +30,7 @@
     </div>
 
     <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btnJobs" title="Every job on the server and where to take it">JOBS</button>
       <button class="btn btn-ghost" id="btnHelp" title="Show help">?</button>
       <button class="btn btn-ghost" id="btnHide"
               title="Collapse to a small handle. The app keeps running — trips still advance and notifications still fire — and one click brings it back, no F1 needed.">HIDE</button>
@@ -60,6 +63,13 @@
     <!-- ------------------------------ Map --------------------------- -->
     <section class="panel panel-map">
       <div class="map-wrap" id="mapWrap"></div>
+
+      <div class="map-missing" id="mapMissing">
+        <b>Map tiles not found</b>
+        <span>The map imagery is not committed to the repo. Fetch it once with:</span>
+        <code>node scripts/fetch-tiles.mjs</code>
+        <span>Everything else — search, waypoints, trips, survey — works without it.</span>
+      </div>
 
       <div class="map-toolbar">
         <button class="btn btn-ghost btn-sm" id="btnMapReset" title="Zoom out to the whole world">RESET</button>

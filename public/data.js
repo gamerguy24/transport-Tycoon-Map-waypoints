@@ -47,6 +47,31 @@ export const BLIP_COLORS = [
   { id: 38, name: 'Deep Blue'  }, { id: 46, name: 'Dark Blue' }
 ];
 
+/*
+ * Every job on the server, from the wiki's Job Center page. Jobs are taken at a
+ * Job Centre (the orange briefcases) rather than at a fixed spot of their own,
+ * so each one lists where its work actually happens instead of a coordinate.
+ */
+export const JOBS = [
+  { n: 'Trucker',            req: 'None',        d: 'Haul cargo between depots, warehouses and industry across the state.' },
+  { n: 'PostOP Driver',      req: 'None',        d: 'Deliver parcels on set routes. Higher Strength recommended.' },
+  { n: 'Bus Driver',         req: 'None',        d: 'Run passenger routes between towns and city stops.' },
+  { n: 'Train Conductor',    req: 'None',        d: 'Drive freight and passenger rail across San Andreas.' },
+  { n: 'Airline Pilot',      req: 'None',        d: 'Fly passengers between airports, working up to airliners.' },
+  { n: 'Cargo Pilot',        req: 'Strength 9',  d: 'Fly freight between airports, working up to cargo planes.' },
+  { n: 'Helicopter Pilot',   req: 'None',        d: 'Rotary charter and transport work.' },
+  { n: 'Leisure Pilot',      req: 'None',        d: 'Casual flying with no contract pressure.' },
+  { n: 'Fisher',             req: 'None',        d: 'Fish the coast, the Alamo Sea and the deep water. Strength helps.' },
+  { n: 'Farmer',             req: 'None',        d: 'Harvest crops and work the fields around Grapeseed.' },
+  { n: 'Garbage Collector',  req: 'None',        d: 'Run refuse routes through the city and county.' },
+  { n: 'Wildlife Hunter',    req: 'None',        d: 'Hunt game in the northern wilderness. Strength helps.' },
+  { n: 'Mechanic',           req: 'None',        d: 'Answer repair callouts from other players.' },
+  { n: 'EMS / Paramedic',    req: 'Strength 5',  d: 'Respond to medical calls and revive players.' },
+  { n: 'Firefighter',        req: 'None',        d: 'Respond to fire callouts from the stations.' },
+  { n: 'Street Racer',       req: 'None',        d: 'Compete in races around the map.' },
+  { n: 'Unemployed',         req: 'None',        d: 'No active job — free to do whatever you like.' }
+];
+
 export const LOCATIONS = [
   /* ------------------------------------------------------------------ *
    * JOB CENTRES — where you pick up / change a job

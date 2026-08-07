@@ -8,7 +8,9 @@
     "dev": "wrangler dev",
     "check": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "tiles": "node scripts/fetch-tiles.mjs",
+    "places": "node scripts/fetch-places.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.40.0"

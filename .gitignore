@@ -1,3 +1,8 @@
 node_modules/
 .wrangler/
 .dev.vars
+
+# Map imagery: fetched with `node scripts/fetch-tiles.mjs`, not committed.
+# See the README — the art is Rockstar-derived and the upstream repo has no licence.
+public/tiles/
+.tiles-tmp/

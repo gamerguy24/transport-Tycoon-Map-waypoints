@@ -1,326 +1,248 @@
 /*
- * map.js — the interactive San Andreas / Cayo Perico map.
+ * map.js — the real San Andreas map, on tiles.
  *
- * Pure SVG. World coordinates are converted straight into viewBox units so a
- * marker's position in the SVG *is* the position you would drive to; there is no
- * second source of truth to keep in sync.
+ * Renders the actual GTA V / Transport Tycoon map imagery with Leaflet instead
+ * of a drawn silhouette. Tiles live in /tiles (see scripts/fetch-tiles.mjs).
+ *
+ * The projection is the one the community live map uses, so a pin placed at a
+ * game coordinate lands exactly where that coordinate is in game:
+ *
+ *     pixelX = 2^zoom * ( 0.005175 * gameX + 34.38     )
+ *     pixelY = 2^zoom * (-0.005173 * gameY + 46.79355  )
+ *
+ * with 288px tiles named {z}_{x}_{y}.jpg. Credit: ttmap by Nova+
+ * (https://github.com/supernovaplus/ttmap), map data by glitchdetector.
  */
 
-import { WORLD, SAN_ANDREAS, CAYO_PERICO, ALAMO_SEA, LS_URBAN, HIGHWAYS, CATEGORIES } from './data.js';
+import { CATEGORIES } from './data.js';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
+const TILE_SIZE = 288;
+const MIN_ZOOM = 3;
+const MAX_NATIVE_ZOOM = 7;
+const MAX_ZOOM = 9;              // beyond 7 Leaflet upscales the z7 tiles
 
-/** world -> viewBox units (y is flipped: game north is up) */
-export const toView = (x, y) => ({ vx: x - WORLD.xMin, vy: WORLD.yMax - y });
-/** viewBox units -> world */
-export const toWorld = (vx, vy) => ({ x: vx + WORLD.xMin, y: WORLD.yMax - vy });
+const T = { a: 0.005175, b: 34.38, c: -0.005173, d: 46.79355 };
 
-const FULL = {
-  x: 0,
-  y: 0,
-  w: WORLD.xMax - WORLD.xMin,
-  h: WORLD.yMax - WORLD.yMin
-};
+/* The full pyramid spans these game coordinates — derived from the transform,
+   used to stop the player panning off into empty grey. */
+const span = 72;                 // pixel extent at zoom 0, i.e. 2^z * 72 total
+const worldX = [-T.b / T.a, (span - T.b) / T.a];
+const worldY = [(span - T.d) / T.c, -T.d / T.c];
 
-const el = (name, attrs = {}) => {
-  const node = document.createElementNS(SVG_NS, name);
-  for (const k in attrs) node.setAttribute(k, attrs[k]);
-  return node;
-};
+/**
+ * Game coords are carried as Leaflet LatLng with lat = X and lng = Y. That is
+ * what the upstream projection expects and it keeps every call site honest:
+ * anything going into Leaflet is `latLng(x, y)`.
+ */
+const CRS = L.extend({}, L.CRS.Simple, {
+  projection: {
+    project: (latlng) => new L.Point(latlng.lat, latlng.lng),
+    unproject: (point) => new L.LatLng(point.x, point.y),
+    bounds: new L.Bounds([-180, -90], [180, 90])
+  },
+  transformation: new L.Transformation(T.a, T.b, T.c, T.d)
+});
 
-const pathFrom = (points, close) => {
-  const d = points.map(([x, y], i) => {
-    const { vx, vy } = toView(x, y);
-    return `${i ? 'L' : 'M'}${vx.toFixed(0)} ${vy.toFixed(0)}`;
-  }).join(' ');
-  return close ? d + ' Z' : d;
-};
+const gameLatLng = (x, y) => L.latLng(x, y);
 
 export class TycoonMap {
   constructor(root, handlers = {}) {
     this.root = root;
     this.handlers = handlers;
-    this.view = { ...FULL };
-    this.markers = new Map();   // id -> { location, node }
+    this.markers = new Map();
     this.selectedId = null;
     this.tripIds = [];
-    this.glyphScale = 1;        // counter-scale applied to pins/arrows on zoom
+    this.player = null;
 
-    this.svg = el('svg', {
-      class: 'map-svg',
-      viewBox: `${FULL.x} ${FULL.y} ${FULL.w} ${FULL.h}`,
-      preserveAspectRatio: 'xMidYMid meet'
+    this.map = L.map(root, {
+      crs: CRS,
+      // SVG, not canvas: markers become real DOM nodes, so they can be styled
+      // with the rest of the HUD and hit-tested individually.
+      renderer: L.svg(),
+      zoomControl: false,
+      attributionControl: false,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+      zoomSnap: 0.5,
+      wheelPxPerZoomLevel: 90,
+      maxBounds: L.latLngBounds(
+        gameLatLng(worldX[0], worldY[0]),
+        gameLatLng(worldX[1], worldY[1])
+      ),
+      maxBoundsViscosity: 0.85
     });
-    root.appendChild(this.svg);
 
-    this.#buildBase();
-    this.layerRoute   = el('g', { class: 'layer-route' });
-    this.layerMarkers = el('g', { class: 'layer-markers' });
-    this.layerLive    = el('g', { class: 'layer-live' });
-    this.svg.append(this.layerRoute, this.layerMarkers, this.layerLive);
+    L.tileLayer('./tiles/{z}_{x}_{y}.jpg', {
+      tileSize: TILE_SIZE,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
+      maxNativeZoom: MAX_NATIVE_ZOOM,
+      minNativeZoom: MIN_ZOOM,
+      noWrap: true,
+      keepBuffer: 3,
+      className: 'tt-tiles',
+      // Without explicit bounds Leaflet asks for tiles beyond the edge of the
+      // pyramid and the viewport fills with broken images.
+      bounds: L.latLngBounds(gameLatLng(-6566, -4735), gameLatLng(7166, 8906)),
+      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+    }).addTo(this.map);
 
+    this.layerRoute   = L.layerGroup().addTo(this.map);
+    this.layerMarkers = L.layerGroup().addTo(this.map);
+    this.layerLive    = L.layerGroup().addTo(this.map);
+
+    this.reset();
     this.#buildLive();
-    this.#wireInteraction();
+
+    // Handle for tests and for poking at the projection from the console.
+    window.__ttmap = this.map;
+
+    this.map.on('click', (ev) => {
+      this.handlers.onMapClick?.({ x: ev.latlng.lat, y: ev.latlng.lng });
+    });
+    this.map.on('zoomend', () => this.#scaleMarkers());
   }
 
-  /* ------------------------------- base map ------------------------------ */
-
-  #buildBase() {
-    const defs = el('defs');
-    const glow = el('filter', { id: 'mapGlow', x: '-30%', y: '-30%', width: '160%', height: '160%' });
-    glow.appendChild(el('feGaussianBlur', { stdDeviation: '55', result: 'b' }));
-    const merge = el('feMerge');
-    merge.appendChild(el('feMergeNode', { in: 'b' }));
-    merge.appendChild(el('feMergeNode', { in: 'SourceGraphic' }));
-    glow.appendChild(merge);
-    defs.appendChild(glow);
-    this.svg.appendChild(defs);
-
-    const base = el('g', { class: 'layer-base' });
-
-    base.appendChild(el('rect', { class: 'map-ocean', x: FULL.x, y: FULL.y, width: FULL.w, height: FULL.h }));
-
-    // Latitude / longitude grid every 1000 world units.
-    const grid = el('g', { class: 'map-grid' });
-    for (let x = Math.ceil(WORLD.xMin / 1000) * 1000; x < WORLD.xMax; x += 1000) {
-      const { vx } = toView(x, 0);
-      grid.appendChild(el('line', { x1: vx, y1: FULL.y, x2: vx, y2: FULL.y + FULL.h }));
-    }
-    for (let y = Math.ceil(WORLD.yMin / 1000) * 1000; y < WORLD.yMax; y += 1000) {
-      const { vy } = toView(0, y);
-      grid.appendChild(el('line', { x1: FULL.x, y1: vy, x2: FULL.x + FULL.w, y2: vy }));
-    }
-    base.appendChild(grid);
-
-    base.appendChild(el('path', { class: 'map-land', filter: 'url(#mapGlow)', d: pathFrom(SAN_ANDREAS, true) }));
-    base.appendChild(el('path', { class: 'map-land', d: pathFrom(CAYO_PERICO, true) }));
-    base.appendChild(el('path', { class: 'map-urban', d: pathFrom(LS_URBAN, true) }));
-    base.appendChild(el('path', { class: 'map-water', d: pathFrom(ALAMO_SEA, true) }));
-
-    const roads = el('g', { class: 'map-roads' });
-    for (const line of HIGHWAYS) roads.appendChild(el('path', { d: pathFrom(line, false) }));
-    base.appendChild(roads);
-
-    const label = (text, x, y, cls) => {
-      const { vx, vy } = toView(x, y);
-      const t = el('text', { class: 'map-label ' + cls, x: vx, y: vy });
-      t.textContent = text;
-      return t;
-    };
-    base.appendChild(label('SAN ANDREAS', 300, 2200, 'lbl-region'));
-    base.appendChild(label('BLAINE COUNTY', 1500, 5300, 'lbl-sub'));
-    base.appendChild(label('LOS SANTOS', -200, -1500, 'lbl-sub'));
-    base.appendChild(label('CAYO PERICO', 4850, -5300, 'lbl-sub'));
-    base.appendChild(label('PACIFIC OCEAN', -3500, -2200, 'lbl-sea'));
-
-    this.svg.appendChild(base);
-  }
+  /* --------------------------------- live -------------------------------- */
 
   #buildLive() {
-    this.playerNode = el('g', { class: 'live-player', visibility: 'hidden' });
-    this.playerInner = el('g', { class: 'live-inner' });
-    this.playerInner.appendChild(el('circle', { class: 'live-player-halo', r: 190 }));
-    this.playerInner.appendChild(el('path', { class: 'live-player-arrow', d: 'M0 -150 L105 130 L0 70 L-105 130 Z' }));
-    this.playerNode.appendChild(this.playerInner);
-    this.layerLive.appendChild(this.playerNode);
+    this.playerMarker = L.marker(gameLatLng(0, 0), {
+      interactive: false,
+      keyboard: false,
+      icon: L.divIcon({
+        className: 'live-player-icon',
+        html: '<span class="lp-halo"></span><span class="lp-arrow"></span>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      })
+    });
 
-    this.wpNode = el('g', { class: 'live-waypoint', visibility: 'hidden' });
-    this.wpInner = el('g', { class: 'live-inner' });
-    this.wpInner.appendChild(el('path', { d: 'M-120 -120 L120 120 M120 -120 L-120 120' }));
-    this.wpInner.appendChild(el('circle', { r: 170, fill: 'none' }));
-    this.wpNode.appendChild(this.wpInner);
-    this.layerLive.appendChild(this.wpNode);
+    this.wpMarker = L.marker(gameLatLng(0, 0), {
+      interactive: false,
+      keyboard: false,
+      icon: L.divIcon({
+        className: 'live-waypoint-icon',
+        html: '<span>✕</span>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      })
+    });
+  }
+
+  setPlayer(pos) {
+    this.player = pos;
+    if (!pos) { this.layerLive.removeLayer(this.playerMarker); return; }
+    this.playerMarker.setLatLng(gameLatLng(pos.x, pos.y));
+    if (!this.layerLive.hasLayer(this.playerMarker)) this.playerMarker.addTo(this.layerLive);
+    const arrow = this.playerMarker.getElement()?.querySelector('.lp-arrow');
+    if (arrow) arrow.style.transform = `rotate(${pos.h || 0}deg)`;
+    this.#redrawRoute();
+  }
+
+  setGameWaypoint(wp) {
+    if (!wp) { this.layerLive.removeLayer(this.wpMarker); return; }
+    this.wpMarker.setLatLng(gameLatLng(wp.x, wp.y));
+    if (!this.layerLive.hasLayer(this.wpMarker)) this.wpMarker.addTo(this.layerLive);
   }
 
   /* -------------------------------- markers ------------------------------ */
 
   setLocations(locations) {
-    this.layerMarkers.textContent = '';
+    this.layerMarkers.clearLayers();
     this.markers.clear();
     for (const loc of locations) this.#addMarker(loc);
+    this.#scaleMarkers();
+    this.setSelected(this.selectedId);
+    this.setTrip(this.tripIds);
   }
 
   #addMarker(loc) {
-    const { vx, vy } = toView(loc.x, loc.y);
     const cat = CATEGORIES[loc.c] || CATEGORIES.landmark;
+    const marker = L.circleMarker(gameLatLng(loc.x, loc.y), {
+      radius: 5,
+      color: 'rgba(0,0,0,.75)',
+      weight: 1.5,
+      fillColor: cat.color,
+      fillOpacity: 1,
+      className: 'tt-marker cat-' + loc.c,
+      bubblingMouseEvents: false
+    });
 
-    const g = el('g', { class: 'marker cat-' + loc.c, transform: `translate(${vx} ${vy})` });
-    // Inner group is counter-scaled on zoom so pins keep a constant screen size.
-    const inner = el('g', { class: 'marker-inner', transform: `scale(${this.glyphScale})` });
-    inner.appendChild(el('circle', { class: 'marker-hit', r: 260 }));
-    inner.appendChild(el('circle', { class: 'marker-ring', r: 150 }));
-    inner.appendChild(el('circle', { class: 'marker-dot', r: 78, fill: cat.color }));
-
-    const label = el('text', { class: 'marker-label', x: 0, y: -230 });
-    label.textContent = loc.n;
-    inner.appendChild(label);
-    g.appendChild(inner);
-
-    g.addEventListener('click', (ev) => {
-      ev.stopPropagation();
+    marker.bindTooltip(loc.n, { direction: 'top', offset: [0, -8], className: 'tt-tip' });
+    marker.on('click', (ev) => {
+      L.DomEvent.stop(ev);
       this.handlers.onSelect?.(loc.id);
     });
-    g.addEventListener('mouseenter', () => this.handlers.onHover?.(loc));
-    g.addEventListener('mouseleave', () => this.handlers.onHover?.(null));
+    marker.on('mouseover', () => this.handlers.onHover?.(loc));
+    marker.on('mouseout', () => this.handlers.onHover?.(null));
 
-    this.layerMarkers.appendChild(g);
-    this.markers.set(loc.id, { location: loc, node: g });
+    marker.addTo(this.layerMarkers);
+    this.markers.set(loc.id, { location: loc, marker });
   }
 
   setSelected(id) {
-    if (this.selectedId && this.markers.has(this.selectedId)) {
-      this.markers.get(this.selectedId).node.classList.remove('is-selected');
-    }
+    const previous = this.selectedId && this.markers.get(this.selectedId);
+    if (previous) previous.marker.setStyle({ color: 'rgba(0,0,0,.75)', weight: 1.5 });
+
     this.selectedId = id;
     const entry = id && this.markers.get(id);
     if (entry) {
-      entry.node.classList.add('is-selected');
-      this.layerMarkers.appendChild(entry.node); // raise to top
+      entry.marker.setStyle({ color: '#38d6b0', weight: 3 });
+      entry.marker.bringToFront();
     }
+    this.#scaleMarkers();
     this.#redrawRoute();
   }
 
   setTrip(ids) {
-    this.tripIds = ids;
-    for (const [id, entry] of this.markers) {
-      entry.node.classList.toggle('is-trip', ids.includes(id));
-    }
+    this.tripIds = ids || [];
     this.#redrawRoute();
   }
 
   #redrawRoute() {
-    this.layerRoute.textContent = '';
+    this.layerRoute.clearLayers();
     const points = [];
-    if (this.player) points.push([this.player.x, this.player.y]);
+    if (this.player) points.push(gameLatLng(this.player.x, this.player.y));
     for (const id of this.tripIds) {
       const entry = this.markers.get(id);
-      if (entry) points.push([entry.location.x, entry.location.y]);
+      if (entry) points.push(gameLatLng(entry.location.x, entry.location.y));
     }
     if (points.length < 2) return;
-    this.layerRoute.appendChild(el('path', {
-      class: 'route-line',
-      d: pathFrom(points, false),
-      'stroke-width': 22 * this.glyphScale,
-      'stroke-dasharray': `${90 * this.glyphScale} ${70 * this.glyphScale}`
-    }));
+    L.polyline(points, {
+      color: '#ffb84d', weight: 2.5, opacity: .9, dashArray: '7 6', interactive: false
+    }).addTo(this.layerRoute);
   }
 
-  /* --------------------------------- live -------------------------------- */
+  /* ------------------------------- viewport ------------------------------ */
 
-  setPlayer(pos) {
-    this.player = pos;
-    if (!pos) { this.playerNode.setAttribute('visibility', 'hidden'); return; }
-    const { vx, vy } = toView(pos.x, pos.y);
-    this.playerNode.setAttribute('transform', `translate(${vx} ${vy}) rotate(${-(pos.h || 0)})`);
-    this.playerNode.setAttribute('visibility', 'visible');
-    this.#redrawRoute();
+  /** `span` is the width in game units we want roughly in view. */
+  focus(x, y, gameSpan = 3000) {
+    const half = gameSpan / 2;
+    this.map.fitBounds(
+      L.latLngBounds(gameLatLng(x - half, y - half), gameLatLng(x + half, y + half)),
+      { animate: false, maxZoom: MAX_NATIVE_ZOOM }
+    );
   }
 
-  setGameWaypoint(wp) {
-    if (!wp) { this.wpNode.setAttribute('visibility', 'hidden'); return; }
-    const { vx, vy } = toView(wp.x, wp.y);
-    this.wpNode.setAttribute('transform', `translate(${vx} ${vy})`);
-    this.wpNode.setAttribute('visibility', 'visible');
+  /** Frame the mainland. Cayo Perico is off to the south-east; pan or search. */
+  reset() {
+    this.map.fitBounds(
+      L.latLngBounds(gameLatLng(-3600, -4000), gameLatLng(4400, 8100)),
+      { animate: false, padding: [6, 6] }
+    );
   }
 
-  /* ------------------------------ interaction ---------------------------- */
-
-  #applyView() {
-    const v = this.view;
-    this.svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
-
-    // Keep marker glyphs and text a constant on-screen size as we zoom in.
-    const scale = v.w / FULL.w;
-    if (Math.abs(scale - this.glyphScale) > 0.001) {
-      this.glyphScale = scale;
-      const transform = `scale(${scale})`;
-      for (const { node } of this.markers.values()) {
-        node.firstChild.setAttribute('transform', transform);
-      }
-      this.playerInner.setAttribute('transform', transform);
-      this.wpInner.setAttribute('transform', transform);
-      this.#redrawRoute();
+  /** Pins shrink when zoomed out so dense Los Santos stays readable. */
+  #scaleMarkers() {
+    const z = this.map.getZoom();
+    const r = z <= 3.5 ? 3 : z <= 4.5 ? 4 : z <= 5.5 ? 5 : z <= 6.5 ? 6 : 7;
+    for (const [id, { marker }] of this.markers) {
+      marker.setRadius(id === this.selectedId ? r + 4 : r);
     }
   }
 
-  #clamp() {
-    const v = this.view;
-    const minW = FULL.w / 14;
-    v.w = Math.min(FULL.w, Math.max(minW, v.w));
-    v.h = v.w * (FULL.h / FULL.w);
-    v.x = Math.min(FULL.w - v.w, Math.max(0, v.x));
-    v.y = Math.min(FULL.h - v.h, Math.max(0, v.y));
-  }
-
-  #eventToView(ev) {
-    const rect = this.svg.getBoundingClientRect();
-    // preserveAspectRatio="meet" letterboxes; recover the drawn area.
-    const scale = Math.min(rect.width / this.view.w, rect.height / this.view.h);
-    const drawnW = this.view.w * scale;
-    const drawnH = this.view.h * scale;
-    const offX = (rect.width - drawnW) / 2;
-    const offY = (rect.height - drawnH) / 2;
-    return {
-      vx: this.view.x + (ev.clientX - rect.left - offX) / scale,
-      vy: this.view.y + (ev.clientY - rect.top - offY) / scale
-    };
-  }
-
-  #wireInteraction() {
-    this.svg.addEventListener('wheel', (ev) => {
-      ev.preventDefault();
-      const before = this.#eventToView(ev);
-      const factor = ev.deltaY > 0 ? 1.25 : 0.8;
-      this.view.w *= factor;
-      this.#clamp();
-      const after = this.#eventToView(ev);
-      this.view.x += before.vx - after.vx;
-      this.view.y += before.vy - after.vy;
-      this.#clamp();
-      this.#applyView();
-    }, { passive: false });
-
-    let dragging = null;
-    this.svg.addEventListener('pointerdown', (ev) => {
-      dragging = { ...this.#eventToView(ev), moved: false };
-      this.svg.setPointerCapture(ev.pointerId);
-    });
-    this.svg.addEventListener('pointermove', (ev) => {
-      if (!dragging) return;
-      const now = this.#eventToView(ev);
-      const dx = dragging.vx - now.vx;
-      const dy = dragging.vy - now.vy;
-      if (Math.abs(dx) + Math.abs(dy) > this.view.w * 0.004) dragging.moved = true;
-      this.view.x += dx;
-      this.view.y += dy;
-      this.#clamp();
-      this.#applyView();
-    });
-    this.svg.addEventListener('pointerup', (ev) => {
-      const wasDrag = dragging?.moved;
-      dragging = null;
-      this.svg.releasePointerCapture?.(ev.pointerId);
-      if (!wasDrag) {
-        const { vx, vy } = this.#eventToView(ev);
-        this.handlers.onMapClick?.(toWorld(vx, vy));
-      }
-    });
-    this.svg.addEventListener('pointercancel', () => { dragging = null; });
-  }
-
-  /** Zoom the view onto a world position. `span` is the width in world units. */
-  focus(x, y, span = 3000) {
-    const { vx, vy } = toView(x, y);
-    this.view.w = span;
-    this.#clamp();
-    this.view.x = vx - this.view.w / 2;
-    this.view.y = vy - this.view.h / 2;
-    this.#clamp();
-    this.#applyView();
-  }
-
-  reset() {
-    this.view = { ...FULL };
-    this.#applyView();
+  /** Leaflet needs telling when its container changes size. */
+  invalidate() {
+    this.map.invalidateSize({ animate: false });
   }
 }

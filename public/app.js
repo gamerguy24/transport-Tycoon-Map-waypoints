@@ -2,7 +2,8 @@
  * app.js — UI controller for the TT Waypoint Map user application.
  */
 
-import { LOCATIONS, SURVEY_TARGETS, CATEGORIES } from './data.js';
+import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS } from './data.js';
+import { TTMAP_PLACES } from './places-ttmap.js';
 import { TycoonMap } from './map.js';
 import {
   cmd, state, onData, onTrigger, inGame,
@@ -54,7 +55,7 @@ const uid = () => 'cw-' + Date.now().toString(36) + '-' + Math.floor(Math.random
  * coordinate, so there is nothing to navigate to.
  */
 function catalogue() {
-  const built = LOCATIONS.map((loc) => {
+  const built = LOCATIONS.concat(TTMAP_PLACES).map((loc) => {
     const fix = store.overrides[loc.id];
     return fix ? { ...loc, x: fix.x, y: fix.y, p: 'exact', fixed: true } : loc;
   });
@@ -755,6 +756,43 @@ function askText(title, placeholder) {
   });
 }
 
+/** Every job on the server, and where to go to take it. */
+function showJobs() {
+  const centres = CATALOG.filter((l) => l.id.startsWith('jc-'));
+  const me = playerPos();
+  const nearest = me
+    ? centres.map((l) => ({ l, d: distance2d(me, l) })).sort((a, b) => a.d - b.d)[0]
+    : null;
+
+  openModal({
+    title: `Jobs (${JOBS.length})`,
+    okLabel: 'CLOSE',
+    cancelLabel: 'JOB CENTRES',
+    body: `
+      <p>Every job is taken at a <b>Job Centre</b> — the orange briefcases on the map.
+      ${nearest ? `Your nearest is <b>${escapeHtml(nearest.l.n)}</b>,
+        ${formatDistance(nearest.d)} away.` : ''}</p>
+      <table class="jobs-table">
+        <tr><th>Job</th><th>Requires</th><th>What you do</th></tr>
+        ${JOBS.map((j) => `<tr>
+          <td><b>${escapeHtml(j.n)}</b></td>
+          <td>${j.req === 'None' ? '<span class="job-free">—</span>' : escapeHtml(j.req)}</td>
+          <td>${escapeHtml(j.d)}</td></tr>`).join('')}
+      </table>`,
+    onOk: () => true
+  });
+
+  // "Job Centres" filters the list down to them rather than just closing.
+  dom.modalCancel.onclick = () => {
+    closeModal();
+    activeCats = new Set(['hq']);
+    dom.search.value = 'job centre';
+    persistCats();
+    if (nearest) select(nearest.l.id);
+    dom.modalCancel.onclick = closeModal;
+  };
+}
+
 function showHelp() {
   openModal({
     title: 'TT Waypoint Map — help',
@@ -971,6 +1009,7 @@ $('btnFavOnly').onclick = () => {
   renderList();
 };
 
+$('btnJobs').onclick = showJobs;
 $('btnMapReset').onclick = () => map.reset();
 $('btnMapPlayer').onclick = () => {
   const me = playerPos();
@@ -1106,6 +1145,17 @@ function boot() {
   renderBlipCount();
   renderSurvey();
   applyVisibility();
+
+  // Leaflet measures its container on construction; the grid may still have
+  // been settling, so re-measure once layout is final and on every resize.
+  requestAnimationFrame(() => { map.invalidate(); map.reset(); });
+  window.addEventListener('resize', () => map.invalidate());
+
+  // Tell the player plainly if the map imagery was never fetched, rather than
+  // leaving them staring at an empty grey rectangle.
+  const probe = new Image();
+  probe.onerror = () => document.querySelector('.panel-map').classList.add('tiles-missing');
+  probe.src = './tiles/3_0_0.jpg';
 
   // Ask the client for its whole cache, and register our extra keybinds.
   cmd.getData();
