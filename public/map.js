@@ -34,7 +34,7 @@ const worldY = [(span - T.d) / T.c, -T.d / T.c];
  * what the upstream projection expects and it keeps every call site honest:
  * anything going into Leaflet is `latLng(x, y)`.
  */
-const CRS = L.extend({}, L.CRS.Simple, {
+export const CRS = L.extend({}, L.CRS.Simple, {
   projection: {
     project: (latlng) => new L.Point(latlng.lat, latlng.lng),
     unproject: (point) => new L.LatLng(point.x, point.y),
@@ -43,7 +43,25 @@ const CRS = L.extend({}, L.CRS.Simple, {
   transformation: new L.Transformation(T.a, T.b, T.c, T.d)
 });
 
-const gameLatLng = (x, y) => L.latLng(x, y);
+export const gameLatLng = (x, y) => L.latLng(x, y);
+
+/** One definition of the tile layer, shared by the big map and the minimap. */
+export function makeTileLayer() {
+  return L.tileLayer('./tiles/{z}_{x}_{y}.jpg', {
+    tileSize: TILE_SIZE,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM,
+    maxNativeZoom: MAX_NATIVE_ZOOM,
+    minNativeZoom: MIN_ZOOM,
+    noWrap: true,
+    keepBuffer: 3,
+    className: 'tt-tiles',
+    // Without explicit bounds Leaflet asks for tiles beyond the edge of the
+    // pyramid and the viewport fills with broken images.
+    bounds: L.latLngBounds(gameLatLng(-6566, -4735), gameLatLng(7166, 8906)),
+    errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+  });
+}
 
 export class TycoonMap {
   constructor(root, handlers = {}) {
@@ -72,20 +90,7 @@ export class TycoonMap {
       maxBoundsViscosity: 0.85
     });
 
-    L.tileLayer('./tiles/{z}_{x}_{y}.jpg', {
-      tileSize: TILE_SIZE,
-      minZoom: MIN_ZOOM,
-      maxZoom: MAX_ZOOM,
-      maxNativeZoom: MAX_NATIVE_ZOOM,
-      minNativeZoom: MIN_ZOOM,
-      noWrap: true,
-      keepBuffer: 3,
-      className: 'tt-tiles',
-      // Without explicit bounds Leaflet asks for tiles beyond the edge of the
-      // pyramid and the viewport fills with broken images.
-      bounds: L.latLngBounds(gameLatLng(-6566, -4735), gameLatLng(7166, 8906)),
-      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
-    }).addTo(this.map);
+    makeTileLayer().addTo(this.map);
 
     this.layerRoute   = L.layerGroup().addTo(this.map);
     this.layerMarkers = L.layerGroup().addTo(this.map);

@@ -532,6 +532,117 @@ body.is-hidden .pinned-hud:not([hidden]) { display: none; }
 
 .ph-mark { color: var(--accent); }
 
+/* =============================== MINIMAP ============================ */
+
+/*
+ * Deliberately outside .app so hiding the UI does not hide the minimap — that
+ * combination is the whole point: no panels, just a map in the corner.
+ */
+.minimap {
+  --mm-size: 250px;
+  position: fixed;
+  z-index: 45;
+  width: var(--mm-size);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;      /* only the controls take clicks */
+}
+.minimap[hidden] { display: none; }
+
+.minimap[data-corner="br"] { bottom: 16px; right: 16px; }
+.minimap[data-corner="bl"] { bottom: 16px; left: 16px; }
+.minimap[data-corner="tr"] { top: 52px;    right: 16px; }
+.minimap[data-corner="tl"] { top: 52px;    left: 16px; }
+
+.mm-viewport {
+  position: relative;
+  width: var(--mm-size);
+  height: var(--mm-size);
+  overflow: hidden;                 /* clips the oversized rotating canvas */
+  border: 2px solid rgba(140, 175, 200, 0.45);
+  border-radius: 8px;
+  background: #0b0f14;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, .6), inset 0 0 40px rgba(0, 0, 0, .55);
+}
+
+.mm-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+.mm-canvas.leaflet-container { background: #0b0f14; outline: none; }
+
+/* Leaflet positions .mm-player itself — never override its transform, that is
+   what places the marker. The arrow inside does the counter-rotation. */
+.mm-player { z-index: 500; }
+.mm-player i {
+  position: absolute; left: 50%; top: 50%;
+  width: 0; height: 0;
+  margin: -10px 0 0 -7px;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 17px solid var(--accent);
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, .95));
+  /* Counter-rotates the map's rotation, so the arrow always points "forward". */
+  transform: rotate(var(--mm-counter, 0deg));
+  transform-origin: 50% 66%;
+}
+
+.mm-chevron {
+  position: absolute; left: 50%; top: 50%;
+  color: var(--amber);
+  font-size: 13px; line-height: 1;
+  text-shadow: 0 0 4px #000;
+  pointer-events: none;
+}
+
+/* A north letter is only honest when the map is north-up; while it rotates the
+   chevron and the heading do the orienting instead. */
+.mm-north {
+  position: absolute; top: 4px; left: 7px;
+  font-size: 9px; font-weight: 800; letter-spacing: 1px;
+  color: rgba(232, 240, 246, .55);
+  text-shadow: 0 0 4px #000;
+}
+.minimap.is-rotating .mm-north { display: none; }
+
+.mm-target {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 9px;
+  background: rgba(10, 14, 20, 0.86);
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  font-size: 11px;
+  backdrop-filter: blur(6px);
+}
+.mm-target[hidden] { display: none; }
+.mm-target-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mm-target-dist { font-family: var(--mono); color: var(--amber); flex: none; }
+
+.mm-bar {
+  display: flex; gap: 3px; justify-content: flex-end;
+  pointer-events: auto;
+  opacity: .35;
+  transition: opacity .15s;
+}
+.minimap:hover .mm-bar { opacity: 1; }
+
+.mm-btn {
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  padding: 0;
+  background: rgba(10, 14, 20, 0.86);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--text-dim);
+  font: inherit; font-size: 12px; line-height: 1;
+  cursor: pointer;
+}
+.mm-btn:hover { color: var(--accent); border-color: var(--accent); }
+.mm-btn.is-on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+
 /* --------------------------- collapsed handle ---------------------- */
 
 .mini-handle {

@@ -30,6 +30,8 @@
     </div>
 
     <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btnMini"
+              title="Toggle the minimap (M). It stays on screen when the UI is hidden.">MINIMAP</button>
       <button class="btn btn-ghost" id="btnJobs" title="Every job on the server and where to take it">JOBS</button>
       <button class="btn btn-ghost" id="btnHelp" title="Show help">?</button>
       <button class="btn btn-ghost" id="btnHide"
@@ -147,7 +149,7 @@
   <footer class="statusbar">
     <span class="status-left" id="statusConn">Waiting for the game client…</span>
     <span class="status-right">
-      <kbd>Esc</kbd> pin · <kbd>H</kbd> hide · <kbd>F1</kbd> focus · <kbd>◻</kbd> waypoint / capture survey ·
+      <kbd>Esc</kbd> pin · <kbd>H</kbd> hide UI · <kbd>M</kbd> minimap · <kbd>F1</kbd> focus · <kbd>◻</kbd> waypoint / capture survey ·
       <kbd>△</kbd> next trip stop · <kbd>○</kbd> clear blips · <kbd>✕</kbd> nearest favourite
     </span>
   </footer>
@@ -162,6 +164,30 @@
       <button class="btn btn-ghost" id="modalCancel">CANCEL</button>
       <button class="btn btn-primary" id="modalOk">OK</button>
     </div>
+  </div>
+</div>
+
+<!--
+  The minimap. Lives outside .app on purpose: it is the thing that stays on
+  screen once the UI is hidden, so it must not be hidden along with it.
+-->
+<div class="minimap" id="minimap" data-corner="br" hidden>
+  <div class="mm-viewport">
+    <div class="mm-canvas"></div>
+    <span class="mm-chevron" hidden>▲</span>
+    <span class="mm-north">N</span>
+  </div>
+  <div class="mm-target" hidden>
+    <span class="mm-target-name">—</span>
+    <span class="mm-target-dist">—</span>
+  </div>
+  <div class="mm-bar">
+    <button class="mm-btn" data-mm="zoomout" title="Zoom out">−</button>
+    <button class="mm-btn" data-mm="zoomin" title="Zoom in">+</button>
+    <button class="mm-btn" data-mm="rotate" title="Rotate with heading">⟳</button>
+    <button class="mm-btn" data-mm="size" title="Cycle size">⤢</button>
+    <button class="mm-btn" data-mm="corner" title="Move to next corner">⌗</button>
+    <button class="mm-btn" data-mm="open" title="Open the full app">▣</button>
   </div>
 </div>
 

@@ -5,6 +5,7 @@
 import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS } from './data.js';
 import { TTMAP_PLACES } from './places-ttmap.js';
 import { TycoonMap } from './map.js';
+import { MiniMap } from './minimap.js';
 import {
   cmd, state, onData, onTrigger, inGame,
   playerPos, gameWaypoint, distance2d, bearing, compassPoint,
@@ -26,7 +27,12 @@ const defaults = {
   favOnly: false,
   autoAdvance: true,
   hidden: false,         // the app's own hide, independent of the client's
-  corner: 'tl'           // where the collapsed handle sits
+  corner: 'tl',          // where the collapsed handle sits
+  mini: true,            // minimap on by default — it is the point of the app
+  miniZoom: 6,
+  miniRotate: true,
+  miniSize: 'm',
+  miniCorner: 'br'
 };
 
 function load() {
@@ -75,6 +81,7 @@ function refreshCatalog() {
   renderDetail();
   renderTrip();
   renderSurvey();
+  if (store.mini) { mini.setLocations(CATALOG); mini.setTarget(miniTarget()); }
 }
 
 /* ================================ DOM ================================= */
@@ -117,6 +124,31 @@ const map = new TycoonMap(dom.mapWrap, {
     renderList();
   }
 });
+
+/* ================================ minimap ============================== */
+
+const mini = new MiniMap($('minimap'), {
+  zoom: store.miniZoom,
+  rotate: store.miniRotate,
+  size: store.miniSize,
+  corner: store.miniCorner
+});
+
+/** What the minimap points at: your selection, else the next trip stop. */
+function miniTarget() {
+  return (selectedId && byId(selectedId)) || byId(store.trip[0]) || null;
+}
+
+function syncMini() {
+  $('minimap').hidden = !store.mini;
+  $('btnMini').classList.toggle('is-on', store.mini);
+  if (!store.mini) return;
+  mini.setLocations(CATALOG);
+  mini.setTarget(miniTarget());
+  const me = playerPos();
+  if (me) mini.setPlayer(me);
+  mini.applySize();
+}
 
 function distanceSuffix(loc) {
   const me = playerPos();
@@ -259,6 +291,7 @@ function select(id) {
   selectedId = id;
   mapPick = null;
   map.setSelected(id);
+  if (store.mini) mini.setTarget(miniTarget());
   renderList();
   renderDetail();
 }
@@ -583,6 +616,7 @@ function toggleTrip(id) {
   else store.trip.push(id);
   save();
   map.setTrip(store.trip);
+  if (store.mini) mini.setTarget(miniTarget());
   renderTrip();
   renderDetail();
 }
@@ -830,6 +864,15 @@ function showHelp() {
         <li><code>EXPORT</code> when you are done — that JSON is how the coordinates get
             shared with everyone else.</li>
       </ul>
+      <h4>The minimap</h4>
+      <ul>
+        <li>Pick a destination here, then press <code>HIDE</code> and drive by the minimap —
+            that is what it is for. It stays on screen when the panel does not.</li>
+        <li>It locks to you and turns with your heading. Your pick is ringed in amber with a
+            line to it, and a chevron on the rim once it is off the edge.</li>
+        <li>Controls appear on hover: zoom, rotate, size, corner, and <code>▣</code> to
+            reopen this panel without <code>F1</code>. <code>M</code> toggles it entirely.</li>
+      </ul>
       <h4>Getting it out of the way</h4>
       <ul>
         <li><code>HIDE</code> (or <code>H</code>) collapses the app to a small handle. It keeps
@@ -966,6 +1009,7 @@ onData((changed) => {
   if (moved) {
     const me = playerPos();
     map.setPlayer(me);
+    if (store.mini) mini.setPlayer(me);
     checkArrival();
     renderPinnedTracker();
     renderMiniHandle();
@@ -1008,6 +1052,43 @@ $('btnFavOnly').onclick = () => {
   $('btnFavOnly').classList.toggle('is-on', store.favOnly);
   renderList();
 };
+
+/* ---------------------------- minimap controls -------------------------- */
+
+$('btnMini').onclick = () => {
+  store.mini = !store.mini;
+  save();
+  syncMini();
+};
+
+$('minimap').addEventListener('click', (ev) => {
+  const action = ev.target.dataset?.mm;
+  if (!action) return;
+  const bar = $('minimap').querySelector('.mm-bar');
+
+  if (action === 'zoomin')  store.miniZoom = mini.setZoom(store.miniZoom + 1);
+  if (action === 'zoomout') store.miniZoom = mini.setZoom(store.miniZoom - 1);
+  if (action === 'rotate') {
+    store.miniRotate = !store.miniRotate;
+    mini.setRotate(store.miniRotate);
+    bar.querySelector('[data-mm="rotate"]').classList.toggle('is-on', store.miniRotate);
+  }
+  if (action === 'size') {
+    const sizes = ['s', 'm', 'l'];
+    store.miniSize = sizes[(sizes.indexOf(store.miniSize) + 1) % sizes.length];
+    mini.opts.size = store.miniSize;
+    mini.applySize();
+  }
+  if (action === 'corner') {
+    const corners = ['br', 'bl', 'tl', 'tr'];
+    store.miniCorner = corners[(corners.indexOf(store.miniCorner) + 1) % corners.length];
+    mini.opts.corner = store.miniCorner;
+    mini.applySize();
+  }
+  // The minimap is usable with the UI hidden, so it needs its own way back in.
+  if (action === 'open') setHidden(false);
+  save();
+});
 
 $('btnJobs').onclick = showJobs;
 $('btnMapReset').onclick = () => map.reset();
@@ -1075,6 +1156,12 @@ window.addEventListener('keydown', (ev) => {
   const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName);
   if (ev.key === '/' && !typing) { ev.preventDefault(); dom.search.focus(); dom.search.select(); }
   if ((ev.key === 'h' || ev.key === 'H') && !typing) { ev.preventDefault(); setHidden(!store.hidden); }
+  if ((ev.key === 'm' || ev.key === 'M') && !typing) {
+    ev.preventDefault();
+    store.mini = !store.mini;
+    save();
+    syncMini();
+  }
   if (ev.key === 'Enter' && document.activeElement === dom.search) {
     const first = visibleLocations()[0];
     if (first) { select(first.id); setWaypointTo(first); }
@@ -1145,11 +1232,13 @@ function boot() {
   renderBlipCount();
   renderSurvey();
   applyVisibility();
+  syncMini();
+  $('minimap').querySelector('[data-mm="rotate"]').classList.toggle('is-on', store.miniRotate);
 
   // Leaflet measures its container on construction; the grid may still have
   // been settling, so re-measure once layout is final and on every resize.
-  requestAnimationFrame(() => { map.invalidate(); map.reset(); });
-  window.addEventListener('resize', () => map.invalidate());
+  requestAnimationFrame(() => { map.invalidate(); map.reset(); mini.applySize(); });
+  window.addEventListener('resize', () => { map.invalidate(); mini.applySize(); });
 
   // Tell the player plainly if the map imagery was never fetched, rather than
   // leaving them staring at an empty grey rectangle.

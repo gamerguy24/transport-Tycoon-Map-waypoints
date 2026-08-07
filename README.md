@@ -15,6 +15,7 @@ GPS route.
 | | |
 |---|---|
 | **237 destinations** | 125 with *exact* in-game coordinates imported from the community live map — every business, garage and self-storage unit — plus job centres, job sites, airports, docks, towns, landmarks and Cayo Perico. |
+| **Minimap** | A GTA-style minimap that rides in the corner and **stays there when you hide the UI**. Rotates with your heading, pins nearby places, draws a line to whatever you picked, and points a chevron at it when it is off the edge. See [The minimap](#the-minimap). |
 | **Real map** | The actual GTA V / Transport Tycoon map imagery, tiled and zoomable, with every destination pinned on it. Click open ground to grab a raw coordinate. |
 | **All 17 jobs** | The `JOBS` button lists every job on the server, its Strength requirement, what it involves, and your nearest Job Centre. |
 | **Survey mode** | 40 real Transport Tycoon locations that the app knows by name but not by coordinate. Arm one, drive to it, press a key — it becomes an exact pin. See [About the coordinates](#about-the-coordinates). |
@@ -74,6 +75,28 @@ Cloudflare dashboard (Workers & Pages → your worker → Settings → Domains &
 
 You can run up to five user apps at once via **New Tab**, and switch between them with
 <kbd>Tab</kbd> immediately after opening the interface.
+
+### The minimap
+
+The intended way to play: **use the panel to pick a destination, then hide the panel and
+drive by the minimap.**
+
+1. Search or click a destination in the UI. That becomes the minimap's target.
+2. `HIDE` (or <kbd>H</kbd>). The panel disappears; the minimap does not.
+3. Drive. The minimap keeps up, and the readout under it counts the distance down.
+
+It locks to your position and rotates with your heading like the game's own, with your
+arrow fixed at the centre pointing forward. Nearby destinations are pinned in their category
+colours; the one you picked is ringed in amber with a dashed line to it. Once it is off the
+edge of the window a chevron pins itself to the rim pointing the way.
+
+The small controls under it — visible on hover — are zoom out / zoom in / rotate / size
+(S-M-L) / corner / reopen the UI. Every one of those persists. <kbd>M</kbd> or the
+`MINIMAP` button turns the whole thing off.
+
+Because it sits outside the app panel it survives every visibility state, including
+hidden **and** pinned, where it is the only thing on screen. The `▣` button reopens the
+full UI without needing <kbd>F1</kbd>.
 
 ### Hide vs. the client's Hide
 
