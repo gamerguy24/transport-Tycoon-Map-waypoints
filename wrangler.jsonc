@@ -1,0 +1,13 @@
+{
+  // Static-assets-only Worker: no server code, Cloudflare just serves ./public
+  // from the edge. `npm run deploy` publishes it.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tt-waypoint-map",
+  "compatibility_date": "2025-08-01",
+  "assets": {
+    "directory": "./public"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

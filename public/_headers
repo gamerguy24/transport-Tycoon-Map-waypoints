@@ -1,0 +1,10 @@
+# The game client caches aggressively inside CEF. `no-cache` still lets the edge
+# and the client store the files, but forces a revalidation, so pushing an update
+# reaches players without them clearing the FiveM cache.
+/*
+  Cache-Control: no-cache
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+# NOTE: deliberately no X-Frame-Options / frame-ancestors header — the Tycoon
+# client loads this page inside an iframe and either one would blank it out.

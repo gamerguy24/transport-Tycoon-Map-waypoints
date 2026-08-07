@@ -1,0 +1,16 @@
+{
+  "name": "tt-waypoint-map",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Transport Tycoon (FiveM) User Application: an in-game waypoint map for jobs, landmarks and islands.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "check": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  }
+}

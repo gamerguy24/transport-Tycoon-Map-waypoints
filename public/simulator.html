@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TT Waypoint Map — client simulator</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05080c; color: #cfe0ea;
+               font: 12px "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  .sim { display: grid; grid-template-columns: 1fr 340px; height: 100%; }
+  .stage { position: relative; background:
+           repeating-linear-gradient(45deg, #0b141c 0 22px, #0d1720 22px 44px); }
+  iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .side { border-left: 1px solid #1e2b36; display: flex; flex-direction: column;
+          background: #080d13; min-height: 0; }
+  .side h1 { font-size: 12px; letter-spacing: 2px; margin: 0; padding: 10px 12px;
+             border-bottom: 1px solid #1e2b36; color: #38d6b0; }
+  .grp { padding: 8px 12px; border-bottom: 1px solid #141f28; }
+  .grp b { display: block; font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase;
+           color: #5d6f7e; margin-bottom: 6px; }
+  button { background: #12202b; color: #cfe0ea; border: 1px solid #24384a; border-radius: 3px;
+           padding: 4px 8px; font: inherit; font-size: 11px; cursor: pointer; margin: 0 3px 3px 0; }
+  button:hover { border-color: #38d6b0; }
+  .kv { font-family: Consolas, monospace; font-size: 11px; line-height: 1.6; color: #8fa3b4; }
+  .kv i { color: #ffb84d; font-style: normal; }
+  #log { flex: 1; overflow: auto; padding: 8px 12px; font-family: Consolas, monospace;
+         font-size: 11px; line-height: 1.5; min-height: 0; }
+  #log div { border-bottom: 1px solid #101922; padding: 2px 0; }
+  #log .t { color: #38d6b0; }
+  .note { padding: 8px 12px; color: #5d6f7e; font-size: 11px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="sim">
+  <div class="stage"><iframe id="app" src="./index.html" title="TT Waypoint Map"></iframe></div>
+
+  <div class="side">
+    <h1>GAME CLIENT SIMULATOR</h1>
+
+    <div class="grp">
+      <b>Fake player</b>
+      <div class="kv">
+        pos <i id="pos">—</i><br>
+        heading <i id="hdg">—</i><br>
+        waypoint <i id="wp">none</i>
+      </div>
+      <div style="margin-top:6px">
+        <button data-move="n">▲ N</button><button data-move="s">▼ S</button>
+        <button data-move="w">◀ W</button><button data-move="e">▶ E</button>
+        <button data-teleport="228,-878">Los Santos</button>
+        <button data-teleport="1601,3662">Sandy</button>
+        <button data-teleport="-267,6231">Paleto</button>
+        <button data-teleport="4840,-5175">Cayo</button>
+      </div>
+    </div>
+
+    <div class="grp">
+      <b>Keybind triggers</b>
+      <button data-trigger="square">◻ Square</button>
+      <button data-trigger="triangle">△ Triangle</button>
+      <button data-trigger="circle">○ Circle</button>
+      <button data-trigger="cross">✕ Cross</button>
+    </div>
+
+    <div class="grp">
+      <b>Focus state</b>
+      <button data-focus="1">Focused</button>
+      <button data-focus="0">Pinned</button>
+    </div>
+
+    <b style="display:block;padding:8px 12px 0;font-size:9px;letter-spacing:1.4px;color:#5d6f7e">
+      COMMANDS RECEIVED
+    </b>
+    <div id="log"></div>
+    <p class="note">This page stands in for the Transport Tycoon client so you can build
+      the app in a normal browser. It speaks the same postMessage protocol.</p>
+  </div>
+</div>
+
+<script>
+/* ---- the fake client's data cache, mirroring the documented key names ---- */
+const cache = {
+  user_id: 401595, source: 12, name: 'Yoshihama',
+  job: 'trucker', job_name: 'Trucker', job_title: 'Trucker (Commercial)',
+  wallet: 4949226366, bank: 128400000,
+  vehicle: 'phantom', vehicleName: 'Phantom', vehicleMake: 'JoBuilt',
+  vehicleClass: 8, vehicleClassName: 'Commercial', fuel: 74, engine: 'on',
+  pos_x: 228, pos_y: -878, pos_z: 30, pos_h: 90,
+  zone: 'DTVINE', zoneName: 'Downtown Vinewood', street: 'Joshua Rd',
+  health: 200, armor: 0, weight: 12, max_weight: 40,
+  waypoint: false, waypoint_x: 0, waypoint_y: 0,
+  hidden: false, pinned: false, focused: true, tabbed: true,
+  weather: 'CLEAR', radio: 'OFF'
+};
+
+const app = document.getElementById('app');
+const logEl = document.getElementById('log');
+
+const push = (data) => app.contentWindow.postMessage({ data }, '*');
+
+function log(text) {
+  const row = document.createElement('div');
+  row.innerHTML = '<span class="t">▸</span> ' + text;
+  logEl.prepend(row);
+  while (logEl.children.length > 200) logEl.lastChild.remove();
+}
+
+function render() {
+  document.getElementById('pos').textContent = `${cache.pos_x.toFixed(0)}, ${cache.pos_y.toFixed(0)}`;
+  document.getElementById('hdg').textContent = `${cache.pos_h.toFixed(0)}°`;
+  document.getElementById('wp').textContent = cache.waypoint
+    ? `${cache.waypoint_x.toFixed(0)}, ${cache.waypoint_y.toFixed(0)}` : 'none';
+}
+
+/* ---- receive commands from the app, exactly as the game client would ---- */
+window.addEventListener('message', (ev) => {
+  const msg = ev.data;
+  if (!msg || !msg.type) return;
+  log(`<b>${msg.type}</b> ${JSON.stringify(msg).slice(0, 160)}`);
+
+  switch (msg.type) {
+    case 'getData':
+      push({ ...cache });
+      break;
+    case 'getNamedData': {
+      const out = {};
+      for (const k of msg.keys || []) out[k] = cache[k];
+      push(out);
+      break;
+    }
+    case 'setWaypoint':
+      cache.waypoint = true;
+      cache.waypoint_x = msg.x;
+      cache.waypoint_y = msg.y;
+      push({ waypoint: true, waypoint_x: msg.x, waypoint_y: msg.y });
+      render();
+      break;
+    case 'pin':
+      cache.pinned = true; cache.focused = false;
+      push({ pinned: true, focused: false });
+      break;
+    case 'close':
+      cache.hidden = true; cache.focused = false;
+      push({ hidden: true, focused: false, pinned: false });
+      break;
+  }
+});
+
+/* ------------------------------ controls ------------------------------- */
+document.addEventListener('click', (ev) => {
+  const t = ev.target;
+  if (t.dataset.move) {
+    const step = 220;
+    if (t.dataset.move === 'n') { cache.pos_y += step; cache.pos_h = 0; }
+    if (t.dataset.move === 's') { cache.pos_y -= step; cache.pos_h = 180; }
+    if (t.dataset.move === 'e') { cache.pos_x += step; cache.pos_h = 90; }
+    if (t.dataset.move === 'w') { cache.pos_x -= step; cache.pos_h = 270; }
+    push({ pos_x: cache.pos_x, pos_y: cache.pos_y, pos_h: cache.pos_h });
+    render();
+  }
+  if (t.dataset.teleport) {
+    const [x, y] = t.dataset.teleport.split(',').map(Number);
+    cache.pos_x = x; cache.pos_y = y;
+    push({ pos_x: x, pos_y: y, pos_h: cache.pos_h });
+    render();
+  }
+  if (t.dataset.trigger) push({ ['trigger_' + t.dataset.trigger]: Date.now() });
+  if (t.dataset.focus) {
+    const on = t.dataset.focus === '1';
+    cache.focused = on; cache.pinned = !on;
+    push({ focused: on, pinned: !on });
+  }
+});
+
+app.addEventListener('load', () => {
+  render();
+  setTimeout(() => push({ ...cache }), 200);
+});
+</script>
+</body>
+</html>

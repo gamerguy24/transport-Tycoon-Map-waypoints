@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TT Waypoint Map</title>
+<meta name="description" content="In-game waypoint map for Transport Tycoon — jobs, landmarks and islands, one click to a GPS route.">
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🗺️</text></svg>">
+</head>
+<body>
+
+<div class="app" id="app">
+
+  <!-- ============================ TOP BAR ============================ -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">TT</span>
+      <span class="brand-name">WAYPOINT MAP</span>
+    </div>
+
+    <div class="hud" id="hud">
+      <div class="hud-chip" id="hudPlayer"><b>—</b><span>Player</span></div>
+      <div class="hud-chip" id="hudJob"><b>—</b><span>Job</span></div>
+      <div class="hud-chip" id="hudZone"><b>—</b><span>Location</span></div>
+      <div class="hud-chip" id="hudVehicle"><b>—</b><span>Vehicle</span></div>
+      <div class="hud-chip hud-cash" id="hudCash"><b>—</b><span>Wallet / Bank</span></div>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="btn btn-ghost" id="btnHelp" title="Show help">?</button>
+      <button class="btn btn-ghost" id="btnHide"
+              title="Collapse to a small handle. The app keeps running — trips still advance and notifications still fire — and one click brings it back, no F1 needed.">HIDE</button>
+      <button class="btn btn-ghost" id="btnPin" title="Keep on screen, give control back to the game (Esc)">PIN</button>
+      <button class="btn btn-ghost btn-danger" id="btnClose"
+              title="Hand the app back to the game client entirely. You need F1 to get it back.">CLOSE</button>
+    </div>
+  </header>
+
+  <!-- ============================== BODY ============================== -->
+  <main class="body">
+
+    <!-- ------------------------- Destination list ------------------- -->
+    <section class="panel panel-list">
+      <div class="search-row">
+        <input type="search" id="search" class="input" placeholder="Search destinations…  ( / )" autocomplete="off" spellcheck="false">
+        <button class="btn btn-ghost btn-icon" id="btnSort" title="Toggle sort: distance / name">↕</button>
+      </div>
+
+      <div class="chips" id="catChips"></div>
+
+      <div class="list-meta">
+        <span id="listCount">—</span>
+        <button class="btn-link" id="btnFavOnly">★ Favourites only</button>
+      </div>
+
+      <ul class="results" id="results"></ul>
+    </section>
+
+    <!-- ------------------------------ Map --------------------------- -->
+    <section class="panel panel-map">
+      <div class="map-wrap" id="mapWrap"></div>
+
+      <div class="map-toolbar">
+        <button class="btn btn-ghost btn-sm" id="btnMapReset" title="Zoom out to the whole world">RESET</button>
+        <button class="btn btn-ghost btn-sm" id="btnMapPlayer" title="Centre on your position">ME</button>
+        <button class="btn btn-ghost btn-sm" id="btnMapSel" title="Centre on the selected destination">TARGET</button>
+        <span class="map-hint">scroll = zoom · drag = pan · click empty water/land = pick a raw coordinate</span>
+      </div>
+
+      <div class="map-tip" id="mapTip" hidden></div>
+    </section>
+
+    <!-- ---------------------------- Detail -------------------------- -->
+    <aside class="panel panel-detail">
+      <div class="detail" id="detail">
+        <div class="empty-state">
+          <div class="empty-mark">◎</div>
+          <p>Pick a destination from the list or click a pin on the map.</p>
+        </div>
+      </div>
+
+      <!-- Trip planner -->
+      <div class="section">
+        <h3 class="section-title">
+          Trip <span class="section-sub" id="tripSummary">empty</span>
+        </h3>
+        <ol class="trip" id="tripList"></ol>
+        <div class="section-actions">
+          <button class="btn btn-primary btn-sm" id="btnTripStart" disabled>ROUTE TO NEXT</button>
+          <button class="btn btn-ghost btn-sm" id="btnTripClear" disabled>CLEAR</button>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="tripAuto" checked>
+          <span>Auto-advance when I arrive (within 80&nbsp;m)</span>
+        </label>
+      </div>
+
+      <!-- Survey: turn the real TT place names into real coordinates -->
+      <div class="section">
+        <h3 class="section-title">
+          Survey <span class="section-sub" id="surveyProgress">0 mapped</span>
+        </h3>
+        <p class="hint" id="surveyHint">
+          These are real Transport Tycoon locations we know by name but not by coordinate.
+          Stand on one and capture it.
+        </p>
+        <div class="survey-armed" id="surveyArmed" hidden>
+          <span class="survey-armed-label">ARMED</span>
+          <span class="survey-armed-name" id="surveyArmedName">—</span>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-primary btn-sm" id="btnSurveyCapture" disabled>CAPTURE HERE</button>
+          <button class="btn btn-ghost btn-sm" id="btnSurveyClear" disabled>DISARM</button>
+        </div>
+        <ul class="survey-list" id="surveyList"></ul>
+      </div>
+
+      <!-- Capture / manage -->
+      <div class="section">
+        <h3 class="section-title">My Waypoints</h3>
+        <div class="section-actions">
+          <button class="btn btn-ghost btn-sm" id="btnCapturePos">＋ HERE</button>
+          <button class="btn btn-ghost btn-sm" id="btnCaptureWp">＋ MAP WAYPOINT</button>
+        </div>
+        <div class="section-actions">
+          <button class="btn btn-ghost btn-sm" id="btnExport">EXPORT</button>
+          <button class="btn btn-ghost btn-sm" id="btnImport">IMPORT</button>
+          <button class="btn btn-ghost btn-sm btn-danger" id="btnBlipsClear">CLEAR BLIPS</button>
+        </div>
+        <p class="hint" id="blipCount">No blips placed by this app.</p>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============================ STATUS BAR ========================= -->
+  <footer class="statusbar">
+    <span class="status-left" id="statusConn">Waiting for the game client…</span>
+    <span class="status-right">
+      <kbd>Esc</kbd> pin · <kbd>H</kbd> hide · <kbd>F1</kbd> focus · <kbd>◻</kbd> waypoint / capture survey ·
+      <kbd>△</kbd> next trip stop · <kbd>○</kbd> clear blips · <kbd>✕</kbd> nearest favourite
+    </span>
+  </footer>
+</div>
+
+<!-- ============================== DIALOG ============================== -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-card">
+    <h2 class="modal-title" id="modalTitle">Title</h2>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">CANCEL</button>
+      <button class="btn btn-primary" id="modalOk">OK</button>
+    </div>
+  </div>
+</div>
+
+<!--
+  Collapsed handle. This is the app's own hide, not the client's: the page stays
+  loaded and focused, so a single click restores it without going through F1.
+  Right-click moves it to the next corner if it clashes with the game HUD.
+-->
+<button class="mini-handle" id="miniHandle" data-corner="tl"
+        title="Click to restore · right-click to move corner">
+  <span class="mini-mark">TT</span>
+  <span class="mini-text" id="miniText">Map</span>
+</button>
+
+<!-- Slim tracker shown while the app is pinned (game has control) -->
+<div class="pinned-hud" id="pinnedHud" hidden>
+  <span class="ph-mark">◎</span>
+  <span class="ph-name" id="phName">—</span>
+  <span class="ph-dist" id="phDist">—</span>
+  <span class="ph-dir" id="phDir">—</span>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
