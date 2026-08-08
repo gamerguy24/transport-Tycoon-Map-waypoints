@@ -96,6 +96,9 @@ arrow fixed at the centre pointing forward. Nearby destinations are pinned in th
 colours; the one you picked is ringed in amber with a dashed line to it. Once it is off the
 edge of the window a chevron pins itself to the rim pointing the way.
 
+Drag it anywhere by its map area, and drag the collapsed handle the same way — both
+positions persist, and the corner button snaps them back onto the corner rails.
+
 The small controls under it — visible on hover — are zoom out / zoom in / rotate / size
 (S-M-L) / corner / reopen the UI. Every one of those persists. <kbd>M</kbd> or the
 `MINIMAP` button turns the whole thing off.
