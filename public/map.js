@@ -45,9 +45,45 @@ export const CRS = L.extend({}, L.CRS.Simple, {
 
 export const gameLatLng = (x, y) => L.latLng(x, y);
 
+/*
+ * Where the tiles come from.
+ *
+ * Self-hosted (`./tiles/`) is the default and the fast path. The CDN fallback
+ * exists because the imagery is bulk art that not every deployment will carry —
+ * a git-based Cloudflare deploy of a checkout without `npm run tiles`, say. The
+ * app switching itself over beats showing the player an empty rectangle.
+ *
+ * Override with ?tiles=<url template> if you host your own.
+ */
+export const TILE_LOCAL = './tiles/{z}_{x}_{y}.jpg';
+export const TILE_CDN =
+  'https://cdn.jsdelivr.net/gh/supernovaplus/ttmap@master/images/maps/dark-mode-tiles/{z}_{x}_{y}.jpg';
+
+const tileLayers = new Set();
+let tileBase = new URL(location.href).searchParams.get('tiles') || TILE_LOCAL;
+
+/**
+ * Repoint every tile layer at a different source.
+ *
+ * `setUrl` alone is not enough: the failed tiles from the previous source are
+ * "loaded" as far as Leaflet is concerned (they resolved to errorTileUrl) and
+ * survive in the zoom-animation container, so the map keeps showing blanks.
+ * Detaching and re-attaching the layer throws all of that away.
+ */
+export function setTileBase(url) {
+  tileBase = url;
+  for (const layer of tileLayers) {
+    const owner = layer._ttMap;
+    layer.setUrl(url, true);
+    if (owner) { owner.removeLayer(layer); owner.addLayer(layer); }
+  }
+}
+
+export const getTileBase = () => tileBase;
+
 /** One definition of the tile layer, shared by the big map and the minimap. */
 export function makeTileLayer() {
-  return L.tileLayer('./tiles/{z}_{x}_{y}.jpg', {
+  const layer = L.tileLayer(tileBase, {
     tileSize: TILE_SIZE,
     minZoom: MIN_ZOOM,
     maxZoom: MAX_ZOOM,
@@ -61,6 +97,36 @@ export function makeTileLayer() {
     bounds: L.latLngBounds(gameLatLng(-6566, -4735), gameLatLng(7166, 8906)),
     errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
   });
+  // Remember which map it is on so setTileBase can re-attach it cleanly.
+  layer.on('add', (ev) => { layer._ttMap = ev.target._map; });
+  tileLayers.add(layer);
+  return layer;
+}
+
+/**
+ * Pick a working tile source before the player notices. Tries the current base,
+ * then the CDN. Resolves to the base that worked, or null if neither did.
+ */
+export function resolveTileBase() {
+  const probe = (base) => new Promise((resolve) => {
+    const url = base.replace('{z}', '3').replace('{x}', '0').replace('{y}', '0');
+    const img = new Image();
+    const done = (ok) => { img.onload = img.onerror = null; resolve(ok); };
+    img.onload = () => done(true);
+    img.onerror = () => done(false);
+    // A hung request should not leave the map blank forever.
+    setTimeout(() => done(false), 8000);
+    img.src = url;
+  });
+
+  return (async () => {
+    if (await probe(tileBase)) return tileBase;
+    if (tileBase !== TILE_CDN && await probe(TILE_CDN)) {
+      setTileBase(TILE_CDN);
+      return TILE_CDN;
+    }
+    return null;
+  })();
 }
 
 export class TycoonMap {

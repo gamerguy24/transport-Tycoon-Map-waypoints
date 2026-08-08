@@ -4,7 +4,7 @@
 
 import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS } from './data.js';
 import { TTMAP_PLACES } from './places-ttmap.js';
-import { TycoonMap } from './map.js';
+import { TycoonMap, resolveTileBase, TILE_CDN } from './map.js';
 import { MiniMap } from './minimap.js';
 import {
   cmd, state, onData, onTrigger, inGame,
@@ -1240,11 +1240,17 @@ function boot() {
   requestAnimationFrame(() => { map.invalidate(); map.reset(); mini.applySize(); });
   window.addEventListener('resize', () => { map.invalidate(); mini.applySize(); });
 
-  // Tell the player plainly if the map imagery was never fetched, rather than
-  // leaving them staring at an empty grey rectangle.
-  const probe = new Image();
-  probe.onerror = () => document.querySelector('.panel-map').classList.add('tiles-missing');
-  probe.src = './tiles/3_0_0.jpg';
+  // Find tiles that actually load — self-hosted first, CDN if this deployment
+  // does not carry them — and only admit defeat if neither answers.
+  resolveTileBase().then((base) => {
+    const panel = document.querySelector('.panel-map');
+    panel.classList.toggle('tiles-missing', base === null);
+    if (base === TILE_CDN) {
+      $('mapMissing').dataset.fallback = '1';
+      console.info('[tt-map] self-hosted tiles unavailable; using the CDN fallback');
+    }
+    if (base) { map.invalidate(); mini.applySize(); }
+  });
 
   // Ask the client for its whole cache, and register our extra keybinds.
   cmd.getData();

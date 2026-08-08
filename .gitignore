@@ -1,8 +1,13 @@
 node_modules/
 .wrangler/
 .dev.vars
-
-# Map imagery: fetched with `node scripts/fetch-tiles.mjs`, not committed.
-# See the README — the art is Rockstar-derived and the upstream repo has no licence.
-public/tiles/
 .tiles-tmp/
+
+# public/tiles/ is deliberately NOT ignored.
+#
+# It was, and that broke deploys: a Cloudflare build from this GitHub repo had
+# no imagery to serve and every player got "Map tiles not found". Committing the
+# ~7.3 MB of tiles is what makes a git-based deploy work out of the box.
+#
+# See the README for where the art comes from. If you would rather not host it,
+# delete public/tiles/ and re-add it here — the app falls back to the CDN.

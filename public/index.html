@@ -67,9 +67,10 @@
       <div class="map-wrap" id="mapWrap"></div>
 
       <div class="map-missing" id="mapMissing">
-        <b>Map tiles not found</b>
-        <span>The map imagery is not committed to the repo. Fetch it once with:</span>
-        <code>node scripts/fetch-tiles.mjs</code>
+        <b>No map imagery</b>
+        <span>Neither the self-hosted tiles nor the CDN fallback responded. If you are
+              offline that is expected; otherwise fetch the tiles once with:</span>
+        <code>npm run tiles</code>
         <span>Everything else — search, waypoints, trips, survey — works without it.</span>
       </div>
 

@@ -37,10 +37,13 @@ from the edge.
 
 ```bash
 npm install
-npm run tiles           # fetch the map imagery (~7.3 MB, once)
 npx wrangler login      # first time only
 npm run deploy
 ```
+
+The map imagery in `public/tiles/` is committed, so a fresh clone or a Cloudflare
+Git-integration build deploys with a working map. If you ever delete it, `npm run tiles`
+puts it back — and the app falls back to a CDN in the meantime rather than breaking.
 
 Wrangler prints the URL, e.g. `https://tt-waypoint-map.<your-subdomain>.workers.dev`.
 **That URL is what players paste into the F1 box.**
@@ -60,8 +63,10 @@ Cloudflare dashboard (Workers & Pages → your worker → Settings → Domains &
 
 * **Do not add `X-Frame-Options` or a `frame-ancestors` CSP.** The game loads the page in
   an iframe; either header makes it render as a blank rectangle. See `public/_headers`.
-* **Keep `Cache-Control: no-cache`.** The FiveM client's embedded browser caches hard, and
-  without revalidation players keep seeing an old build long after you deploy.
+* **Keep `Cache-Control: no-cache` on `/*`.** The FiveM client's embedded browser caches
+  hard, and without revalidation players keep seeing an old build long after you deploy.
+  Note that `_headers` rules *accumulate* rather than override, which is why `/tiles/*` and
+  `/vendor/*` have to `! Cache-Control` before setting their own long-lived value.
 
 ---
 

@@ -1,10 +1,25 @@
-# The game client caches aggressively inside CEF. `no-cache` still lets the edge
-# and the client store the files, but forces a revalidation, so pushing an update
-# reaches players without them clearing the FiveM cache.
+# Rules accumulate: a later match ADDS to an earlier one rather than replacing
+# it, so the more specific rules below must unset Cache-Control with `!` before
+# setting their own. Without that, tiles end up with
+# "no-cache, public, max-age=..., immutable" and revalidate anyway.
 /*
   Cache-Control: no-cache
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
+
+# `no-cache` above is for the app itself: the FiveM client's embedded browser
+# caches hard, and without revalidation players keep seeing an old build long
+# after you deploy.
+
+# Tiles never change under a given name, and one pan fires dozens of requests.
+# Revalidating each of those makes the map crawl in game.
+/tiles/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+
+/vendor/*
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
 
 # NOTE: deliberately no X-Frame-Options / frame-ancestors header — the Tycoon
 # client loads this page inside an iframe and either one would blank it out.
