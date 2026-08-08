@@ -2,9 +2,9 @@
  * app.js — UI controller for the TT Waypoint Map user application.
  */
 
-import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS } from './data.js';
+import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS, OVERLAYS } from './data.js';
 import { TTMAP_PLACES } from './places-ttmap.js';
-import { TycoonMap, resolveTileBase, TILE_CDN } from './map.js';
+import { TycoonMap, resolveTileBase, TILE_CDN, addOverlays, boundsOf } from './map.js';
 import { MiniMap } from './minimap.js';
 import { loadRoads, route } from './roads.js';
 import { makeDraggable } from './drag.js';
@@ -24,7 +24,7 @@ const STORE_KEY = 'ttmap.v1';
  * embedded browser caches hard enough that a stale copy looks like a bug in
  * the code rather than a stale copy.
  */
-const BUILD = '2026-08-07.6';
+const BUILD = '2026-08-07.7';
 
 const defaults = {
   favourites: [],        // location ids
@@ -160,6 +160,60 @@ function syncMini() {
   const me = playerPos();
   if (me) mini.setPlayer(me);
   mini.applySize();
+}
+
+/* ------------------------------- overlays ------------------------------- */
+
+/*
+ * Patch images for regions where the base tiles are out of date — see the
+ * OVERLAYS comment in data.js. Applied to both maps so the minimap does not
+ * disagree with the big one.
+ */
+const overlayLayers = addOverlays(map.map, OVERLAYS);
+const overlayLayersMini = addOverlays(mini.map, OVERLAYS);
+
+/** `?calibrate` — line an overlay up against the tiles and print its bounds. */
+function initCalibrate() {
+  if (!new URL(location.href).searchParams.has('calibrate')) return;
+
+  const panel = document.createElement('div');
+  panel.className = 'calibrate';
+  panel.innerHTML = `<h4>Overlay calibration</h4>` + OVERLAYS.map((o, i) => `
+    <div class="cal-block" data-i="${i}">
+      <b>${escapeHtml(o.name)}</b>
+      <div class="cal-grid">
+        ${['x1', 'y1', 'x2', 'y2'].map((k) => `
+          <label>${k}<input type="number" step="10" data-k="${k}" value="${o.bounds[k]}"></label>`).join('')}
+        <label>opacity<input type="number" step="0.05" min="0" max="1" data-k="opacity" value="${o.opacity ?? 1}"></label>
+      </div>
+    </div>`).join('') +
+    `<textarea class="cal-out" readonly rows="6"></textarea>
+     <p class="hint">Edit until the overlay lines up with the roads, then paste this
+     into <code>OVERLAYS</code> in <code>data.js</code>.</p>`;
+  document.body.appendChild(panel);
+
+  const sync = () => {
+    for (const block of panel.querySelectorAll('.cal-block')) {
+      const o = OVERLAYS[+block.dataset.i];
+      for (const input of block.querySelectorAll('input')) {
+        const v = parseFloat(input.value);
+        if (!Number.isFinite(v)) continue;
+        if (input.dataset.k === 'opacity') o.opacity = v;
+        else o.bounds[input.dataset.k] = v;
+      }
+      for (const layers of [overlayLayers, overlayLayersMini]) {
+        const layer = layers.get(o.id);
+        if (!layer) continue;
+        layer.setBounds(boundsOf(o.bounds));
+        layer.setOpacity(o.opacity ?? 1);
+      }
+    }
+    panel.querySelector('.cal-out').value = JSON.stringify(
+      OVERLAYS.map((o) => ({ id: o.id, bounds: o.bounds, opacity: o.opacity })), null, 2);
+  };
+
+  panel.addEventListener('input', sync);
+  sync();
 }
 
 /* ------------------------------- dragging ------------------------------ */
@@ -1324,6 +1378,7 @@ function boot() {
   renderSurvey();
   applyVisibility();
   syncMini();
+  initCalibrate();
   $('minimap').querySelector('[data-mm="rotate"]').classList.toggle('is-on', store.miniRotate);
 
   // Leaflet measures its container on construction; the grid may still have

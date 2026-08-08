@@ -219,6 +219,41 @@ export const LOCATIONS = [
 ];
 
 /* ==================================================================== *
+ * MAP OVERLAYS — patch stale regions of the base tiles
+ *
+ * The tile imagery comes from the community live map, which has not been
+ * re-rendered since 2024. Anything the server has changed since is therefore
+ * wrong on the base map — most visibly the strip north of the San Andreas
+ * coast, which still shows Liberty City from the pre-wipe era even though the
+ * server replaced it with Roxwood County.
+ *
+ * An overlay is a georeferenced image drawn on top of the tiles for one region.
+ * Drop a PNG in public/overlays/, set the world bounds it covers, and it
+ * replaces that part of the map on both the main map and the minimap.
+ *
+ * Getting the bounds right by hand is fiddly, so load the app with `?calibrate`
+ * and nudge them live — the panel prints the snippet to paste back here.
+ *
+ * An overlay whose image is missing is skipped silently, so this list can name
+ * images that have not been produced yet.
+ * ==================================================================== */
+
+export const OVERLAYS = [
+  {
+    id: 'roxwood',
+    name: 'Roxwood County',
+    url: './overlays/roxwood.png',
+    // Starting guess for the strip north of the real coastline, measured off
+    // the tiles. Calibrate against the in-game pause map before trusting it.
+    bounds: { x1: -4470, y1: 6900, x2: 4010, y2: 8600 },
+    opacity: 1,
+    // Shown in the map legend so nobody mistakes an uncalibrated overlay for
+    // survey-grade imagery.
+    note: 'Replaces the removed Liberty City area'
+  }
+];
+
+/* ==================================================================== *
  * SURVEY TARGETS — real Transport Tycoon places, with no coordinates yet
  *
  * These names come straight off the in-game pause-map blip legend. The server

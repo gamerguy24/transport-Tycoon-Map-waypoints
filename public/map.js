@@ -107,6 +107,39 @@ export function makeTileLayer() {
  * Pick a working tile source before the player notices. Tries the current base,
  * then the CDN. Resolves to the base that worked, or null if neither did.
  */
+/**
+ * Attach georeferenced patch images over the tiles.
+ *
+ * Each returns its Leaflet layer so calibration can move it live. Images that
+ * fail to load are skipped rather than left as broken boxes on the map — the
+ * overlay list is allowed to name art that does not exist yet.
+ */
+export function addOverlays(map, overlays, { pane = 'ttOverlay', zIndex = 250 } = {}) {
+  if (!map.getPane(pane)) {
+    map.createPane(pane);
+    map.getPane(pane).style.zIndex = zIndex;
+    map.getPane(pane).style.pointerEvents = 'none';
+  }
+
+  const made = new Map();
+  for (const o of overlays) {
+    const layer = L.imageOverlay(o.url, boundsOf(o.bounds), {
+      opacity: o.opacity ?? 1,
+      pane,
+      interactive: false,
+      className: 'tt-overlay'
+    });
+    // Only attach once we know the image exists.
+    const probe = new Image();
+    probe.onload = () => layer.addTo(map);
+    probe.src = o.url;
+    made.set(o.id, layer);
+  }
+  return made;
+}
+
+export const boundsOf = (b) => L.latLngBounds(gameLatLng(b.x1, b.y1), gameLatLng(b.x2, b.y2));
+
 export function resolveTileBase() {
   const probe = (base) => new Promise((resolve) => {
     const url = base.replace('{z}', '3').replace('{x}', '0').replace('{y}', '0');
