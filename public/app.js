@@ -4,7 +4,7 @@
 
 import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS, OVERLAYS } from './data.js';
 import { TTMAP_PLACES } from './places-ttmap.js';
-import { TycoonMap, resolveTileBase, TILE_CDN, addOverlays, boundsOf } from './map.js';
+import { TycoonMap, resolveTileBase, TILE_CDN, addOverlays, boundsOf, lockAspect } from './map.js';
 import { MiniMap } from './minimap.js';
 import { loadRoads, route } from './roads.js';
 import { makeDraggable } from './drag.js';
@@ -24,7 +24,7 @@ const STORE_KEY = 'ttmap.v1';
  * embedded browser caches hard enough that a stale copy looks like a bug in
  * the code rather than a stale copy.
  */
-const BUILD = '2026-08-08.1';
+const BUILD = '2026-08-08.2';
 
 const defaults = {
   favourites: [],        // location ids
@@ -169,8 +169,15 @@ function syncMini() {
  * OVERLAYS comment in data.js. Applied to both maps so the minimap does not
  * disagree with the big one.
  */
-const overlayLayers = addOverlays(map.map, OVERLAYS);
-const overlayLayersMini = addOverlays(mini.map, OVERLAYS);
+// Calibration has to be able to see what it is positioning, so it turns on
+// overlays that are otherwise disabled.
+const CALIBRATING = new URL(location.href).searchParams.has('calibrate');
+const liveOverlays = CALIBRATING
+  ? OVERLAYS.map((o) => Object.assign(o, { enabled: true }))
+  : OVERLAYS;
+
+const overlayLayers = addOverlays(map.map, liveOverlays);
+const overlayLayersMini = addOverlays(mini.map, liveOverlays);
 
 /** `?calibrate` — line an overlay up against the tiles and print its bounds. */
 function initCalibrate() {
@@ -201,6 +208,9 @@ function initCalibrate() {
         if (input.dataset.k === 'opacity') o.opacity = v;
         else o.bounds[input.dataset.k] = v;
       }
+      // Typing a height that disagrees with the image would stretch it, so the
+      // height is always re-derived from the width.
+      if (o.aspect) lockAspect(o, o.aspect);
       for (const layers of [overlayLayers, overlayLayersMini]) {
         const layer = layers.get(o.id);
         if (!layer) continue;
@@ -263,6 +273,7 @@ function initCalibrate() {
     o.bounds.x2 = cx + (o.bounds.x2 - cx) * k;
     o.bounds.y1 = cy + (o.bounds.y1 - cy) * k;
     o.bounds.y2 = cy + (o.bounds.y2 - cy) * k;
+    if (o.aspect) lockAspect(o, o.aspect);
     setInputs();
   }, { capture: true, passive: false });
 

@@ -243,13 +243,28 @@ export const OVERLAYS = [
     id: 'roxwood',
     name: 'Roxwood County',
     url: './overlays/roxwood.png',
-    // Starting guess for the strip north of the real coastline, measured off
-    // the tiles. Calibrate against the in-game pause map before trusting it.
-    bounds: { x1: -4470, y1: 6900, x2: 4010, y2: 8600 },
+
+    /*
+     * OFF until someone calibrates it.
+     *
+     * The image is right — it is Roxwood's real road layout, captured from the
+     * pause map. Where it goes is not known: the capture has no usable scale
+     * bar and no identifiable landmark shared with the tiles, so there is
+     * nothing to solve the position against. A wrongly placed patch smeared
+     * over the map is worse than the stale tiles it was meant to fix, so it
+     * stays off rather than shipping a guess.
+     *
+     * To finish it: load the app with `?calibrate` (which force-enables every
+     * overlay), shift-drag and shift-wheel until it lines up with your live
+     * player arrow, paste the printed bounds back here, and set enabled: true.
+     */
+    enabled: false,
+
+    // Starting point only: correct aspect ratio, arbitrary position. The
+    // renderer re-derives the height from the image anyway — see lockAspect.
+    bounds: { x1: -1700, y1: 9174, x2: 1300, y2: 6827 },
     opacity: 1,
-    // Shown in the map legend so nobody mistakes an uncalibrated overlay for
-    // survey-grade imagery.
-    note: 'Replaces the removed Liberty City area'
+    note: 'Replaces the removed Liberty City area — needs calibrating'
   }
 ];
 

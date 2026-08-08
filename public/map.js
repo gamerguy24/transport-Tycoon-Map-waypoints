@@ -123,19 +123,44 @@ export function addOverlays(map, overlays, { pane = 'ttOverlay', zIndex = 250 } 
 
   const made = new Map();
   for (const o of overlays) {
+    if (o.enabled === false) continue;
     const layer = L.imageOverlay(o.url, boundsOf(o.bounds), {
       opacity: o.opacity ?? 1,
       pane,
       interactive: false,
       className: 'tt-overlay'
     });
-    // Only attach once we know the image exists.
+    // Only attach once we know the image exists, and never attach it stretched:
+    // hand-written bounds will not match the image's aspect ratio, and a map
+    // squashed to a smear is worse than the stale tiles underneath.
     const probe = new Image();
-    probe.onload = () => layer.addTo(map);
+    probe.onload = () => {
+      lockAspect(o, probe.naturalWidth / probe.naturalHeight);
+      layer.setBounds(boundsOf(o.bounds));
+      layer.addTo(map);
+    };
     probe.src = o.url;
     made.set(o.id, layer);
   }
   return made;
+}
+
+/**
+ * Force an overlay's world bounds to the image's own aspect ratio, keeping the
+ * centre and the width. Mutates `o.bounds`, so both maps and the calibration
+ * panel stay in agreement.
+ */
+export function lockAspect(o, imageAspect) {
+  if (!Number.isFinite(imageAspect) || imageAspect <= 0) return o.bounds;
+  const b = o.bounds;
+  const width = Math.abs(b.x2 - b.x1);
+  const height = width / imageAspect;
+  const cy = (b.y1 + b.y2) / 2;
+  // y1 is the northern edge, so it is the larger world Y.
+  b.y1 = cy + height / 2;
+  b.y2 = cy - height / 2;
+  o.aspect = imageAspect;
+  return b;
 }
 
 export const boundsOf = (b) => L.latLngBounds(gameLatLng(b.x1, b.y1), gameLatLng(b.x2, b.y2));
