@@ -1057,7 +1057,6 @@ $('btnSort').onclick = () => {
 $('btnFavOnly').onclick = () => {
   store.favOnly = !store.favOnly;
   save();
-  $('statusBuild').textContent = 'build ' + BUILD;
   $('btnFavOnly').classList.toggle('is-on', store.favOnly);
   renderList();
 };
@@ -1228,6 +1227,7 @@ function boot() {
     dom.statusConn.textContent = 'Preview mode — not running inside the game client';
   }
 
+  $('statusBuild').textContent = 'build ' + BUILD;
   $('btnFavOnly').classList.toggle('is-on', store.favOnly);
   $('btnSort').title = `Sorting by ${store.sort === 'dist' ? 'distance' : 'name'}`;
 
