@@ -16,6 +16,14 @@ import {
 
 const STORE_KEY = 'ttmap.v1';
 
+/*
+ * Bump this on every deploy. It is shown in the status bar so "am I actually
+ * running the new build?" is answerable at a glance — the FiveM client's
+ * embedded browser caches hard enough that a stale copy looks like a bug in
+ * the code rather than a stale copy.
+ */
+const BUILD = '2026-08-07.3';
+
 const defaults = {
   favourites: [],        // location ids
   custom: [],            // { id, n, c:'custom', x, y, d, p:'exact' }
@@ -1049,6 +1057,7 @@ $('btnSort').onclick = () => {
 $('btnFavOnly').onclick = () => {
   store.favOnly = !store.favOnly;
   save();
+  $('statusBuild').textContent = 'build ' + BUILD;
   $('btnFavOnly').classList.toggle('is-on', store.favOnly);
   renderList();
 };
