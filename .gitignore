@@ -15,3 +15,6 @@ node_modules/
 # Scratch space for scripts/build-roads.mjs. The upstream node dump is 135 MB —
 # well over GitHub's 100 MB file limit — so it must never be committed.
 .roads-tmp/
+
+# Chrome scratch for scripts/prep-overlay.mjs
+.overlay-tmp/

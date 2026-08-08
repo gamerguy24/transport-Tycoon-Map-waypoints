@@ -24,7 +24,7 @@ const STORE_KEY = 'ttmap.v1';
  * embedded browser caches hard enough that a stale copy looks like a bug in
  * the code rather than a stale copy.
  */
-const BUILD = '2026-08-07.7';
+const BUILD = '2026-08-08.1';
 
 const defaults = {
   favourites: [],        // location ids
@@ -213,6 +213,65 @@ function initCalibrate() {
   };
 
   panel.addEventListener('input', sync);
+
+  const setInputs = () => {
+    for (const block of panel.querySelectorAll('.cal-block')) {
+      const o = OVERLAYS[+block.dataset.i];
+      for (const input of block.querySelectorAll('input')) {
+        if (input.dataset.k !== 'opacity') input.value = Math.round(o.bounds[input.dataset.k]);
+      }
+    }
+    sync();
+  };
+
+  /*
+   * Typing numbers is precise but slow. The fast way to georeference this is in
+   * game: stand somewhere recognisable, then shift-drag the overlay until your
+   * arrow sits where you actually are, and shift-wheel until the roads line up.
+   */
+  const active = () => OVERLAYS[0];
+  let grab = null;
+
+  map.map.on('mousedown', (ev) => {
+    if (!ev.originalEvent.shiftKey) return;
+    map.map.dragging.disable();
+    grab = { x: ev.latlng.lat, y: ev.latlng.lng };
+  });
+  map.map.on('mousemove', (ev) => {
+    if (!grab) return;
+    const o = active();
+    const dx = ev.latlng.lat - grab.x;
+    const dy = ev.latlng.lng - grab.y;
+    o.bounds.x1 += dx; o.bounds.x2 += dx;
+    o.bounds.y1 += dy; o.bounds.y2 += dy;
+    grab = { x: ev.latlng.lat, y: ev.latlng.lng };
+    setInputs();
+  });
+  const drop = () => { if (grab) { grab = null; map.map.dragging.enable(); } };
+  map.map.on('mouseup', drop);
+  map.map.on('mouseout', drop);
+
+  map.map.getContainer().addEventListener('wheel', (ev) => {
+    if (!ev.shiftKey) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const o = active();
+    const k = ev.deltaY < 0 ? 1.02 : 1 / 1.02;
+    const cx = (o.bounds.x1 + o.bounds.x2) / 2;
+    const cy = (o.bounds.y1 + o.bounds.y2) / 2;
+    o.bounds.x1 = cx + (o.bounds.x1 - cx) * k;
+    o.bounds.x2 = cx + (o.bounds.x2 - cx) * k;
+    o.bounds.y1 = cy + (o.bounds.y1 - cy) * k;
+    o.bounds.y2 = cy + (o.bounds.y2 - cy) * k;
+    setInputs();
+  }, { capture: true, passive: false });
+
+  const help = document.createElement('p');
+  help.className = 'hint';
+  help.innerHTML = '<b>Shift-drag</b> the map to move the overlay · ' +
+                   '<b>Shift-wheel</b> to resize it. Line it up with your player arrow.';
+  panel.appendChild(help);
+
   sync();
 }
 
