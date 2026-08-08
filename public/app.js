@@ -6,6 +6,7 @@ import { LOCATIONS, SURVEY_TARGETS, CATEGORIES, JOBS } from './data.js';
 import { TTMAP_PLACES } from './places-ttmap.js';
 import { TycoonMap, resolveTileBase, TILE_CDN } from './map.js';
 import { MiniMap } from './minimap.js';
+import { loadRoads, route } from './roads.js';
 import {
   cmd, state, onData, onTrigger, inGame,
   playerPos, gameWaypoint, distance2d, bearing, compassPoint,
@@ -158,6 +159,55 @@ function syncMini() {
   mini.applySize();
 }
 
+/* ============================== road routing =========================== */
+
+/*
+ * Air and sea genuinely do travel in straight lines, so road routing is only
+ * right for something with wheels. Anything else keeps the direct line.
+ */
+function wantsRoadRoute() {
+  const cls = String(state.vehicleClassName || '').toLowerCase();
+  if (cls.includes('plane') || cls.includes('heli') || cls.includes('boat')) return false;
+  return true;
+}
+
+let routeToken = 0;      // guards against a slow route landing after a newer one
+let lastRouteKey = '';
+
+/** Recompute the drawn route for the current target, if anything moved enough. */
+function updateRoute({ force = false } = {}) {
+  const target = miniTarget();
+  const me = playerPos();
+
+  if (!target || !me || !wantsRoadRoute()) {
+    map.setRoutePath(null);
+    mini.setRoutePath(null);
+    lastRouteKey = '';
+    return;
+  }
+
+  // Recomputing on every position packet would be pointless work; a route only
+  // meaningfully changes once you have actually travelled.
+  const key = `${target.id}|${Math.round(me.x / 150)}|${Math.round(me.y / 150)}`;
+  if (!force && key === lastRouteKey) return;
+  lastRouteKey = key;
+
+  const token = ++routeToken;
+  loadRoads().then((graph) => {
+    if (!graph || token !== routeToken) return;
+    const result = route(me, target);
+    if (token !== routeToken) return;
+    // No result means no road connects them — Cayo Perico, mostly. The straight
+    // line is then the honest answer, not a failure.
+    map.setRoutePath(result ? result.points : null);
+    mini.setRoutePath(result ? result.points : null);
+    routeDistance = result ? result.distance : null;
+    renderDetail();
+  });
+}
+
+let routeDistance = null;
+
 function distanceSuffix(loc) {
   const me = playerPos();
   return me ? ` · ${formatDistance(distance2d(me, loc))}` : '';
@@ -300,6 +350,7 @@ function select(id) {
   mapPick = null;
   map.setSelected(id);
   if (store.mini) mini.setTarget(miniTarget());
+  updateRoute({ force: true });
   renderList();
   renderDetail();
 }
@@ -319,7 +370,11 @@ function renderDetail() {
 
   const cat = CATEGORIES[loc.c];
   const me = playerPos();
-  const dist = me ? distance2d(me, loc) : null;
+  const direct = me ? distance2d(me, loc) : null;
+  // Once a road route exists, its length is the number that matters — how far
+  // you actually have to drive, not how far it is as the crow flies.
+  const onRoad = routeDistance !== null && loc.id === miniTarget()?.id;
+  const dist = onRoad ? routeDistance : direct;
   const brg = me ? bearing(me, loc) : null;
   const fav = store.favourites.includes(loc.id);
   const inTrip = store.trip.includes(loc.id);
@@ -332,7 +387,7 @@ function renderDetail() {
     <p class="d-desc">${escapeHtml(loc.d || '')}</p>
 
     <div class="d-stats">
-      <div class="d-stat"><b>${dist === null ? '—' : formatDistance(dist)}</b><span>Distance</span></div>
+      <div class="d-stat"><b>${dist === null ? '—' : formatDistance(dist)}</b><span>${onRoad ? 'By road' : 'Distance'}</span></div>
       <div class="d-stat"><b>${brg === null ? '—' : compassPoint(brg)}</b><span>Heading</span></div>
       <div class="d-stat"><b>${dist === null ? '—' : formatDuration(eta(dist))}</b><span>Est. time</span></div>
     </div>
@@ -625,6 +680,7 @@ function toggleTrip(id) {
   save();
   map.setTrip(store.trip);
   if (store.mini) mini.setTarget(miniTarget());
+  updateRoute({ force: true });
   renderTrip();
   renderDetail();
 }
@@ -1019,6 +1075,7 @@ onData((changed) => {
     map.setPlayer(me);
     if (store.mini) mini.setPlayer(me);
     checkArrival();
+    updateRoute();
     renderPinnedTracker();
     renderMiniHandle();
     // Distances tick over at most once a second — the client sends position far faster.

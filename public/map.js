@@ -270,8 +270,25 @@ export class TycoonMap {
     this.#redrawRoute();
   }
 
+  /** Road-following polyline from the router, or null to fall back to lines. */
+  setRoutePath(points) {
+    this.routePath = points;
+    this.#redrawRoute();
+  }
+
   #redrawRoute() {
     this.layerRoute.clearLayers();
+
+    // A real road route wins; the dashed straight line is only the fallback for
+    // when there is no road between the two ends (or the graph has not loaded).
+    if (this.routePath && this.routePath.length > 1) {
+      L.polyline(this.routePath.map((p) => gameLatLng(p.x, p.y)), {
+        color: '#ffb84d', weight: 3.5, opacity: .95, lineJoin: 'round', lineCap: 'round',
+        interactive: false
+      }).addTo(this.layerRoute);
+      return;
+    }
+
     const points = [];
     if (this.player) points.push(gameLatLng(this.player.x, this.player.y));
     for (const id of this.tripIds) {

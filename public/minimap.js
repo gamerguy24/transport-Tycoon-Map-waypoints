@@ -156,6 +156,12 @@ export class MiniMap {
     this.#drawTarget();
   }
 
+  /** Road-following polyline from the router, or null for a straight line. */
+  setRoutePath(points) {
+    this.routePath = points;
+    this.#drawTarget();
+  }
+
   /**
    * The target readout. When it is off the edge of the minimap we clamp a
    * chevron to the rim pointing at it, which is the only way a 250px window
@@ -181,10 +187,19 @@ export class MiniMap {
     label.querySelector('.mm-target-dist').textContent =
       dist >= 1000 ? (dist / 1000).toFixed(1) + ' km' : Math.round(dist) + ' m';
 
-    L.polyline(
-      [gameLatLng(this.player.x, this.player.y), gameLatLng(this.target.x, this.target.y)],
-      { color: '#ffb84d', weight: 2, opacity: .85, dashArray: '5 5', interactive: false }
-    ).addTo(this.layerRoute);
+    // Road route if the router produced one, straight line otherwise.
+    const line = this.routePath && this.routePath.length > 1
+      ? this.routePath.map((p) => gameLatLng(p.x, p.y))
+      : [gameLatLng(this.player.x, this.player.y), gameLatLng(this.target.x, this.target.y)];
+    L.polyline(line, {
+      color: '#ffb84d',
+      weight: this.routePath ? 3 : 2,
+      opacity: .9,
+      dashArray: this.routePath ? null : '5 5',
+      lineJoin: 'round',
+      lineCap: 'round',
+      interactive: false
+    }).addTo(this.layerRoute);
 
     // Is it inside the visible window?
     const here = this.map.latLngToContainerPoint(gameLatLng(this.player.x, this.player.y));

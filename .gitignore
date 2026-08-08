@@ -11,3 +11,7 @@ node_modules/
 #
 # See the README for where the art comes from. If you would rather not host it,
 # delete public/tiles/ and re-add it here — the app falls back to the CDN.
+
+# Scratch space for scripts/build-roads.mjs. The upstream node dump is 135 MB —
+# well over GitHub's 100 MB file limit — so it must never be committed.
+.roads-tmp/
