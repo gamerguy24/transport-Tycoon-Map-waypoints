@@ -16,6 +16,7 @@ GPS route.
 |---|---|
 | **237 destinations** | 125 with *exact* in-game coordinates imported from the community live map — every business, garage and self-storage unit — plus job centres, job sites, airports, docks, towns, landmarks and Cayo Perico. |
 | **Minimap** | A GTA-style minimap that rides in the corner and **stays there when you hide the UI**. Rotates with your heading, pins nearby places, draws a line to whatever you picked, and points a chevron at it when it is off the edge. See [The minimap](#the-minimap). |
+| **On-road routing** | Routes follow the roads, not a straight line — A* over GTA V's own vehicle path nodes (65,839 nodes, 70,749 edges, packed to 1.1 MB). See [Routing](#routing). |
 | **Real map** | The actual GTA V / Transport Tycoon map imagery, tiled and zoomable, with every destination pinned on it. Click open ground to grab a raw coordinate. |
 | **All 17 jobs** | The `JOBS` button lists every job on the server, its Strength requirement, what it involves, and your nearest Job Centre. |
 | **Survey mode** | 40 real Transport Tycoon locations that the app knows by name but not by coordinate. Arm one, drive to it, press a key — it becomes an exact pin. See [About the coordinates](#about-the-coordinates). |
@@ -257,6 +258,39 @@ set of factual coordinates rather than bulk artwork — and it is credited in th
 
 If the tiles are missing the app says so plainly in the map panel and everything else —
 search, waypoints, trips, survey — keeps working.
+
+### Routing
+
+Routes follow the roads rather than cutting a straight line across country.
+
+The graph in [`public/roads.bin`](public/roads.bin) is distilled from
+[DurtyFree/gta-v-data-dumps](https://github.com/DurtyFree/gta-v-data-dumps) — GTA V's own
+vehicle path nodes. That dump is a 147 MB JSON of which nearly all is metadata we do not
+need; [`scripts/build-roads.mjs`](scripts/build-roads.mjs) keeps position, road class and
+adjacency, packs them into typed arrays, and gets **65,839 nodes / 70,749 edges into 1.1 MB**.
+
+At runtime it is fetched lazily on the first route request, both ends snap to the nearest
+road node, and A* runs between them. Freeways are weighted slightly cheaper and dirt roads
+slightly dearer, so routes read the way a driver would actually pick them. The detail panel
+then quotes **By road** distance instead of straight-line.
+
+Straight lines remain where they are the honest answer — aircraft, boats, and any target with
+no road connection to you (Cayo Perico, mostly). Those draw dashed; a real road route draws
+solid.
+
+To rebuild the graph:
+
+```bash
+mkdir -p .roads-tmp && cd .roads-tmp
+curl -L -o nodes.zip https://raw.githubusercontent.com/DurtyFree/gta-v-data-dumps/master/nodes.zip
+unzip nodes.zip && cd ..
+node --max-old-space-size=8192 scripts/build-roads.mjs
+```
+
+`.roads-tmp/` is gitignored, and must stay that way: at 135 MB the raw dump is over GitHub's
+100 MB file limit, and committing it makes `git push` fail with a pre-receive rejection that
+VS Code reports as the rather misleading *"Can't push refs to remote. Try running Pull
+first."*
 
 ### Leaflet
 
