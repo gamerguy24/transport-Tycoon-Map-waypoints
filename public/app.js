@@ -22,7 +22,7 @@ const STORE_KEY = 'ttmap.v1';
  * embedded browser caches hard enough that a stale copy looks like a bug in
  * the code rather than a stale copy.
  */
-const BUILD = '2026-08-07.3';
+const BUILD = '2026-08-07.4';
 
 const defaults = {
   favourites: [],        // location ids
