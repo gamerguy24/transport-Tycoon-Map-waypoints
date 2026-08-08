@@ -7,6 +7,7 @@ import { TTMAP_PLACES } from './places-ttmap.js';
 import { TycoonMap, resolveTileBase, TILE_CDN } from './map.js';
 import { MiniMap } from './minimap.js';
 import { loadRoads, route } from './roads.js';
+import { makeDraggable } from './drag.js';
 import {
   cmd, state, onData, onTrigger, inGame,
   playerPos, gameWaypoint, distance2d, bearing, compassPoint,
@@ -36,7 +37,9 @@ const defaults = {
   favOnly: false,
   autoAdvance: true,
   hidden: false,         // the app's own hide, independent of the client's
-  corner: 'tl',          // where the collapsed handle sits
+  corner: 'tl',          // where the collapsed handle sits, until dragged
+  handlePos: null,       // {x,y} once dragged; overrides `corner`
+  miniPos: null,         // {x,y} once dragged; overrides `miniCorner`
   mini: true,            // minimap on by default — it is the point of the app
   miniZoom: 6,
   miniRotate: true,
@@ -158,6 +161,22 @@ function syncMini() {
   if (me) mini.setPlayer(me);
   mini.applySize();
 }
+
+/* ------------------------------- dragging ------------------------------ */
+
+/*
+ * Both overlays start pinned to a corner and switch to a free position the
+ * moment they are dragged. The corner buttons put them back on the rails.
+ */
+const miniDrag = makeDraggable($('minimap').querySelector('.mm-viewport'), $('minimap'), {
+  position: store.miniPos,
+  onEnd: (pos) => { store.miniPos = pos; save(); }
+});
+
+const handleDrag = makeDraggable(dom.miniHandle, dom.miniHandle, {
+  position: store.handlePos,
+  onEnd: (pos) => { store.handlePos = pos; save(); }
+});
 
 /* ============================== road routing =========================== */
 
@@ -1148,6 +1167,10 @@ $('minimap').addEventListener('click', (ev) => {
     const corners = ['br', 'bl', 'tl', 'tr'];
     store.miniCorner = corners[(corners.indexOf(store.miniCorner) + 1) % corners.length];
     mini.opts.corner = store.miniCorner;
+    // A dragged position would otherwise pin it in place and the button would
+    // look broken.
+    store.miniPos = null;
+    miniDrag.reset();
     mini.applySize();
   }
   // The minimap is usable with the UI hidden, so it needs its own way back in.
@@ -1208,6 +1231,8 @@ dom.miniHandle.oncontextmenu = (ev) => {
   ev.preventDefault();
   const corners = ['tl', 'tr', 'br', 'bl'];
   store.corner = corners[(corners.indexOf(store.corner) + 1) % corners.length];
+  store.handlePos = null;      // snap back to the rails after a free drag
+  handleDrag.reset();
   save();
   applyVisibility();
 };

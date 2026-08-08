@@ -561,6 +561,10 @@ body.is-hidden .pinned-hud:not([hidden]) { display: none; }
   width: var(--mm-size);
   height: var(--mm-size);
   overflow: hidden;                 /* clips the oversized rotating canvas */
+  /* The map itself is the grab area; the buttons below keep their own clicks. */
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
   border: 2px solid rgba(140, 175, 200, 0.45);
   border-radius: 8px;
   background: #0b0f14;
@@ -629,6 +633,7 @@ body.is-hidden .pinned-hud:not([hidden]) { display: none; }
   transition: opacity .15s;
 }
 .minimap:hover .mm-bar { opacity: 1; }
+.mm-viewport.is-dragging { cursor: grabbing; border-color: var(--accent); }
 
 .mm-btn {
   width: 22px; height: 22px;
@@ -646,24 +651,28 @@ body.is-hidden .pinned-hud:not([hidden]) { display: none; }
 
 /* --------------------------- collapsed handle ---------------------- */
 
+/*
+ * No panel behind this — it floats directly over the game like the rest of the
+ * HUD. Legibility comes from the badge and a text shadow rather than a filled
+ * box, so it never puts a black rectangle over what you are driving at.
+ */
 .mini-handle {
   position: fixed;
   display: none;
   align-items: center; gap: 7px;
-  padding: 4px 10px 4px 4px;
-  background: rgba(10, 14, 20, 0.8);
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  backdrop-filter: blur(6px);
+  padding: 2px;
+  background: none;
+  border: none;
   color: var(--text);
   font: inherit; font-size: 11px;
-  cursor: pointer;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, .5);
-  opacity: .75;
-  transition: opacity .12s, border-color .12s;
+  cursor: grab;
+  opacity: .9;
+  transition: opacity .12s;
   z-index: 40;
+  touch-action: none;      /* pointer events drive the drag, not scrolling */
 }
-.mini-handle:hover { opacity: 1; border-color: var(--accent); }
+.mini-handle:hover { opacity: 1; }
+.mini-handle.is-dragging { cursor: grabbing; opacity: 1; }
 body.is-hidden:not(.is-pinned) .mini-handle { display: flex; }
 
 /* Sits clear of the client's own user-app tab bar along the very top. */
@@ -676,10 +685,14 @@ body.is-hidden:not(.is-pinned) .mini-handle { display: flex; }
   font-size: 11px; font-weight: 800; letter-spacing: .5px;
   color: var(--accent-ink); background: var(--accent);
   padding: 2px 6px; border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .8);
 }
 .mini-text {
   letter-spacing: .4px; color: var(--text-dim);
   max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* Stands in for the removed panel: readable over bright road and dark night. */
+  text-shadow: 0 0 3px #000, 0 0 6px #000, 0 1px 2px #000;
+  font-weight: 600;
 }
 .mini-handle.has-target .mini-text { color: var(--amber); }
 .ph-name { font-weight: 600; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
